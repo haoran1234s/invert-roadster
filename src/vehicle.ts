@@ -46,7 +46,7 @@ export class Vehicle {
             pivot.clear(); pivot.add(spin); // model wheel replaces greybox wheel: pivot steers (y), spin rotates (x)
           });
         } else this.wheels.forEach(w => w.visible = false); // wheels baked into body
-        root.traverse(o => { if ((o as THREE.Mesh).isMesh) { (o as THREE.Mesh).frustumCulled = false; const m = (o as THREE.Mesh).material as THREE.MeshStandardMaterial; if (envMap && m.isMeshStandardMaterial) { m.envMap = envMap; m.envMapIntensity = 0.7; } } });
+        root.traverse(o => { if ((o as THREE.Mesh).isMesh) { (o as THREE.Mesh).frustumCulled = false; const m = (o as THREE.Mesh).material as THREE.MeshStandardMaterial; if (envMap && m.isMeshStandardMaterial) { m.envMap = envMap; m.envMapIntensity = 1.3; m.roughness = Math.min(m.roughness, 0.55); } } });
         placeholder.visible = false; this.mesh.add(root); this.modelLoaded = true; dr.dispose();
       }, undefined, e => console.warn('car model failed, using greybox', e));
     }

@@ -18,7 +18,7 @@ export class Vapor {
     for (let i = 0; i < this.N; i++) {
       if (this.life[i] <= 0) continue; this.life[i] -= dt; const k = Math.max(0, this.life[i] / this.max[i]);
       const j = i * 3; for (let a = 0; a < 3; a++) { this.vel[j + a] *= 1 - 1.8 * dt; this.pos[j + a] += this.vel[j + a] * dt; }
-      this.vel[j + 1] += 0.6 * dt; const c = 0.16 * k; this.col[j] = this.col[j + 1] = c; this.col[j + 2] = c * 1.05;
+      this.vel[j + 1] += 0.6 * dt; const c = 0.085 * k; this.col[j] = this.col[j + 1] = c; this.col[j + 2] = c * 1.05;
       if (this.life[i] <= 0) this.pos[j + 1] = -9999;
     }
     (this.pts.geometry.attributes.position as THREE.BufferAttribute).needsUpdate = true; (this.pts.geometry.attributes.color as THREE.BufferAttribute).needsUpdate = true;

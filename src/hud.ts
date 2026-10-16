@@ -5,7 +5,7 @@ export class Hud {
   ctx: CanvasRenderingContext2D;
   constructor(private cv: HTMLCanvasElement) { this.ctx = cv.getContext('2d')!; }
   gauge(x: number, y: number, r: number, label: string, unit: string, val: number, max: number, text: string) {
-    const c = this.ctx; c.strokeStyle = CY; c.fillStyle = CY; c.lineWidth = 1;
+    const c = this.ctx; c.fillStyle = 'rgba(8,12,22,0.5)'; c.beginPath(); c.arc(x, y, r, 0, Math.PI * 2); c.fill(); c.strokeStyle = CY; c.fillStyle = CY; c.lineWidth = 1;
     c.globalAlpha = 0.35; c.beginPath(); c.arc(x, y, r, 0, Math.PI * 2); c.stroke(); c.beginPath(); c.arc(x, y, r * 0.78, 0, Math.PI * 2); c.stroke();
     for (let i = 0; i <= 40; i++) { const a = Math.PI * 0.75 + i / 40 * Math.PI * 1.5; const l = i % 5 ? 0.9 : 0.84; c.beginPath(); c.moveTo(x + Math.cos(a) * r * l, y + Math.sin(a) * r * l); c.lineTo(x + Math.cos(a) * r * 0.97, y + Math.sin(a) * r * 0.97); c.stroke(); }
     c.globalAlpha = 1; c.lineWidth = 3; const k = Math.max(0, Math.min(1, val / max));
@@ -13,7 +13,7 @@ export class Hud {
     c.textAlign = 'center'; c.font = `bold ${r * 0.34}px Consolas, monospace`; c.fillText(text, x, y + r * 0.1);
     c.font = `${r * 0.16}px Consolas, monospace`; c.globalAlpha = 0.8; c.fillText(unit, x, y + r * 0.38); c.fillText(label, x, y + r + r * 0.28); c.globalAlpha = 1;
   }
-  draw(v: Vehicle, s: Scoring, info: { cam: string; level: string; stars: { label: string; ok: boolean }[]; hint: string; fps: number; debug?: string; compact?: boolean }) {
+  draw(v: Vehicle, s: Scoring, info: { cam: string; level: string; stars: { label: string; ok: boolean }[]; hint: string; fps: number; debug?: string; compact?: boolean; sections?: string[]; phase?: number; phaseFrac?: number; banner?: string; bannerA?: number }) {
     const cv = this.cv, c = this.ctx, dpr = Math.min(devicePixelRatio || 1, info.compact ? 1.5 : 2); const W = innerWidth, H = innerHeight;
     if (cv.width !== W * dpr) { cv.width = W * dpr; cv.height = H * dpr; cv.style.width = W + 'px'; cv.style.height = H + 'px'; }
     c.setTransform(dpr, 0, 0, dpr, 0, 0); c.clearRect(0, 0, W, H);
@@ -39,6 +39,20 @@ export class Hud {
     c.font = '15px Consolas'; c.fillText(`RUN ${Math.round(s.run)}   COMBO x${s.combo}`, W - 20, 62);
     c.fillText(`${Math.round(v.vel.length() * 3.6)} KM/H`, W - 20, 84); c.fillText(`CAM: ${info.cam}`, W - 20, 104);
     if (info.debug) { c.textAlign = 'left'; c.font = '12px Consolas'; c.fillStyle = '#7f7'; c.fillText(info.debug, info.compact ? W * 0.3 : 20, info.compact ? 20 : H - 8); c.textAlign = 'right'; c.fillStyle = CY; }
+    // level progress bar with sections
+    if (info.sections) {
+      const n = info.sections.length, pw = Math.min(460, W * 0.42), px = W / 2 - pw / 2, py = info.compact ? 40 : 38, sw = pw / n;
+      c.textAlign = 'center'; c.font = `${info.compact ? 11 : 12}px "Microsoft YaHei", sans-serif`;
+      for (let i = 0; i < n; i++) {
+        const done = i < info.phase!, cur = i === info.phase;
+        c.fillStyle = done ? 'rgba(61,255,160,0.85)' : 'rgba(232,244,255,0.18)'; c.fillRect(px + i * sw + 1, py, sw - 2, 6);
+        if (cur) { c.fillStyle = '#ffc23a'; c.fillRect(px + i * sw + 1, py, (sw - 2) * info.phaseFrac!, 6); }
+        c.fillStyle = cur ? '#ffc23a' : done ? '#3dffa0' : '#aab'; c.fillText(info.sections[i], px + i * sw + sw / 2, py + 20);
+      }
+      const mx = px + (info.phase! + info.phaseFrac!) * sw; c.fillStyle = '#fff'; c.beginPath(); c.moveTo(mx, py - 2); c.lineTo(mx - 5, py - 9); c.lineTo(mx + 5, py - 9); c.fill();
+      c.font = `bold ${info.compact ? 15 : 18}px "Microsoft YaHei", sans-serif`; c.fillStyle = '#ffc23a'; c.fillText(`当前：${info.sections[info.phase!]}`, W / 2, py + 44);
+    }
+    if (info.banner) { c.globalAlpha = info.bannerA ?? 1; c.font = `bold ${info.compact ? 15 : 19}px "Microsoft YaHei", sans-serif`; const tw = c.measureText(info.banner).width + 30; c.fillStyle = 'rgba(10,14,24,0.6)'; c.fillRect(W / 2 - tw / 2, H * 0.42 - 24, tw, 36); c.fillStyle = '#fff'; c.textAlign = 'center'; c.fillText(info.banner, W / 2, H * 0.42); c.globalAlpha = 1; }
     // messages
     c.textAlign = 'center'; c.font = 'bold 22px "Microsoft YaHei", sans-serif';
     s.msgs.forEach((m, i) => { c.globalAlpha = Math.min(1, m.ttl); c.fillStyle = '#fff'; c.fillText(m.t, W / 2, H * 0.28 + i * 30); }); c.globalAlpha = 1;

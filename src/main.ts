@@ -22,13 +22,13 @@ const Q = new URLSearchParams(location.search);
 const DEBUG = Q.has('debug'); const MOBILE = isTouch || Q.has('mobile');
 const BASE_DPR = Math.min(devicePixelRatio, MOBILE ? 1.5 : 2);
 const renderer = new THREE.WebGLRenderer({ antialias: !MOBILE, powerPreference: 'high-performance', preserveDrawingBuffer: Q.has('shots') });
-renderer.setPixelRatio(BASE_DPR); renderer.setSize(innerWidth, innerHeight); renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.setPixelRatio(BASE_DPR); renderer.setSize(innerWidth, innerHeight); renderer.toneMapping = THREE.ACESFilmicToneMapping; renderer.toneMappingExposure = 1.35;
 document.body.prepend(renderer.domElement);
 const scene = new THREE.Scene();
 const camera = new THREE.PerspectiveCamera(70, innerWidth / innerHeight, 0.1, MOBILE ? 1500 : 3000);
 const composer = new EffectComposer(renderer); composer.addPass(new RenderPass(scene, camera));
 // bloom at reduced internal resolution on mobile; can be disabled by adaptive quality
-const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.9, 0.5, 0.6); composer.addPass(bloom);
+const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.55, 0.4, 0.93); composer.addPass(bloom);
 let scale = 1; let bloomOn = !Q.has('nobloom');
 function applySize() {
   const pr = BASE_DPR * scale; renderer.setPixelRatio(pr); composer.setPixelRatio(pr);
@@ -53,7 +53,9 @@ buildLevel(L, scene, world);
 const car = new Vehicle(vehicleData, thrusterData, world, scene, envTex);
 const vapor = new Vapor(scene); const score = new Scoring(); const hud = new Hud(document.getElementById('hud') as HTMLCanvasElement); const rig = new CamRig(camera);
 let checkpoint = 0;
-function reset() { const cp = L.checkpoints[checkpoint]; car.reset(cp.pos, cp.yawDeg); score.reset(); rig.update(1, car, true); }
+let phase = 0, phaseFrac = 0, airT = 0, banner = 0;
+const SECTIONS = ['起步', '上弯', '倒挂', '飞出', '落地'];
+function reset() { const cp = L.checkpoints[checkpoint]; car.reset(cp.pos, cp.yawDeg); score.reset(); phase = 0; phaseFrac = 0; airT = 0; banner = 6; rig.update(1, car, true); }
 reset();
 const starOk = () => L.stars.map(s => ({ label: s.label, ok: s.type === 'invertedSec' ? score.bestInverted >= s.value : s.type === 'safeLandAfterInvert' ? score.safeLandAfterInvert : score.run >= s.value || score.score >= s.value && s.type !== 'score' }));
 const earned = L.stars.map(() => false);
@@ -70,6 +72,15 @@ function fixedStep(c: Controls) {
     for (let k = 0; k < (MOBILE ? 2 : 3); k++) vapor.emit(p, d, 0.7, 4);
   }
   if (car.grounded && !wasGround && car.vel.length() > 3) vapor.burst(tmpB.copy(car.pos).addScaledVector(car.normal, -0.5), 260);
+  // level progress phases
+  if (car.grounded) airT = 0; else airT += dt;
+  if (phase === 0) { phaseFrac = THREE.MathUtils.clamp((L.start.pos[2] - car.pos.z) / (L.start.pos[2] - L.ramp.z0), 0, 1); if (car.grounded && car.pos.z < L.ramp.z0 && car.normal.y < 0.95) phase = 1; }
+  if (phase === 1) { phaseFrac = THREE.MathUtils.clamp(Math.acos(THREE.MathUtils.clamp(car.normal.y, -1, 1)) / (Math.PI * 0.6), 0, 1); if (car.grounded && car.normal.y < -0.3) phase = 2; }
+  if (phase === 2) { phaseFrac = THREE.MathUtils.clamp(score.invertedSec / 0.8, 0, 1); }
+  if ((phase === 1 || phase === 2) && airT > 0.3) phase = 3;
+  if (phase === 3) { phaseFrac = Math.min(1, airT / 5); if (car.grounded && car.normal.y > 0.9) phase = 4; }
+  if (phase === 4) phaseFrac = 1;
+  banner = Math.max(0, banner - dt);
   wasGround = car.grounded; vapor.update(dt);
   starOk().forEach((s, i) => { if (s.ok && !earned[i]) { earned[i] = true; score.msg(`★ ${s.label}`); } });
 }
@@ -80,7 +91,7 @@ function frame() {
   const c = forced ?? mergeTouch(readControls());
   while (pressedOnce.length) { const k = pressedOnce.shift(); if (k === 'KeyR') reset(); if (k === 'KeyC') rig.next(); if (k === 'KeyT') car.V.air.stabilize = car.V.air.stabilize ? 0 : 3; }
   if (!forced) { acc += dt; let n = 0; while (acc >= 1 / 60 && n < 5) { fixedStep(c); acc -= 1 / 60; n++; } if (n === 5) acc = 0; }
-  rig.update(dt, car); render();
+  rig.update(dt, car); (scene.userData.sky as THREE.Object3D)?.position.copy(camera.position); render();
   requestAnimationFrame(frame);
 }
 renderer.info.autoReset = false;
@@ -89,7 +100,7 @@ const starInfo = L.stars.map(s => ({ label: s.label, ok: false }));
 function render() {
   renderer.info.reset(); if (bloomOn) composer.render(); else renderer.render(scene, camera);
   starInfo.forEach((s, i) => s.ok = earned[i]);
-  hud.draw(car, score, { cam: CAMS[rig.mode], level: `L1 ${L.name}`, stars: starInfo, fps, hint: HINT, debug: DEBUG ? `${fps} FPS  ${(ftimes[ftimes.length - 1] ?? 0).toFixed(1)}ms  calls ${renderer.info.render.calls}  tris ${renderer.info.render.triangles}  res x${(BASE_DPR * scale).toFixed(2)}  bloom ${bloomOn ? 'on' : 'off'}` : '', compact: MOBILE });
+  hud.draw(car, score, { cam: CAMS[rig.mode], level: `L1 ${L.name}`, stars: starInfo, fps, hint: HINT, debug: DEBUG ? `${fps} FPS  ${(ftimes[ftimes.length - 1] ?? 0).toFixed(1)}ms  calls ${renderer.info.render.calls}  tris ${renderer.info.render.triangles}  res x${(BASE_DPR * scale).toFixed(2)}  bloom ${bloomOn ? 'on' : 'off'}` : '', compact: MOBILE, sections: SECTIONS, phase, phaseFrac, banner: banner > 0 ? (MOBILE ? '左摇杆向上全油门 → 冲上前方弯道，倒挂后飞出，按「推进」稳住落地' : 'W 全油门 → 冲上前方弯道，倒挂后飞出，空格推进器稳住落在绿色落地区') : '', bannerA: Math.min(1, banner) });
 }
 requestAnimationFrame(frame);
 function mergeTouch(c: Controls): Controls {
@@ -107,5 +118,5 @@ function mergeTouch(c: Controls): Controls {
   perf() { const a = ftimes.slice(-120); return { avgMs: +(a.reduce((x, y) => x + y, 0) / a.length).toFixed(1), calls: renderer.info.render.calls, scale: +(BASE_DPR * scale).toFixed(2), bloom: bloomOn, touch: { ...touch }, tris: renderer.info.render.triangles, w: renderer.domElement.width, h: renderer.domElement.height }; },
   release() { forced = null; }, setCam(i: number) { rig.mode = i; rig.update(1 / 60, car, true); }, reset,
   modelLoaded: () => car.modelLoaded,
-  state: () => ({ pos: car.pos.toArray().map(x => +x.toFixed(2)), up: car.up.toArray().map(x => +x.toFixed(2)), normal: car.normal.toArray().map(x => +x.toFixed(2)), speed: +car.vel.length().toFixed(1), vy: +car.vel.y.toFixed(1), grounded: car.grounded, contacts: car.contacts, gas: +car.gas.toFixed(2), df: Math.round(car.downforceN / 9.81), score: Math.round(score.score), inv: +score.bestInverted.toFixed(2), stars: [...earned], crashed: score.crashed, msgs: score.msgs.map(m => m.t) }),
+  state: () => ({ phase: SECTIONS[phase], pos: car.pos.toArray().map(x => +x.toFixed(2)), up: car.up.toArray().map(x => +x.toFixed(2)), normal: car.normal.toArray().map(x => +x.toFixed(2)), speed: +car.vel.length().toFixed(1), vy: +car.vel.y.toFixed(1), grounded: car.grounded, contacts: car.contacts, gas: +car.gas.toFixed(2), df: Math.round(car.downforceN / 9.81), score: Math.round(score.score), inv: +score.bestInverted.toFixed(2), stars: [...earned], crashed: score.crashed, msgs: score.msgs.map(m => m.t) }),
 };

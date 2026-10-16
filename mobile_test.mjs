@@ -13,8 +13,8 @@ await p.screenshot({ path: '../shots/' + (process.env.P ?? 'mobile_') + '01_star
 const st = () => p.evaluate(() => window.__game.state());
 const s0 = await st();
 // stick up+right (throttle+steer) and hold fan with second finger simultaneously (multi-touch)
-await T('touchStart', [{ ...stick, id: 1 }]); await T('touchMove', [{ x: stick.x + 25, y: stick.y - 58, id: 1 }]);
-await T('touchStart', [{ x: stick.x + 25, y: stick.y - 58, id: 1 }, { ...fan, id: 2 }]);
+await T('touchStart', [{ ...stick, id: 1 }]); await T('touchMove', [{ x: stick.x + 12, y: stick.y - 60, id: 1 }]);
+await T('touchStart', [{ x: stick.x + 12, y: stick.y - 60, id: 1 }, { ...fan, id: 2 }]);
 await p.waitForTimeout(300);
 const mid = await p.evaluate(() => window.__game.perf().touch);
 await p.waitForTimeout(5000);
