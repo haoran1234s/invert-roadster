@@ -30,7 +30,7 @@ for (const lv of want) {
         // in air: optional back-flips with pitch while high, then stabilize + thrust to soften landing
         const flipsWanted = strat === 'best' ? 1 : strat === 'flip1' ? 1 : 0;
         if (s.flips < flipsWanted && s.pos[1] > 50) c = { pitch: 1 };
-        else c = { thrust: s.up[1] > 0.6 && s.vy < -2 && s.alt < (s.vy * s.vy) / 31 * 1.15 + 2.5 };
+        else c = { thrust: s.up[1] > 0.6 && s.vy < (lv === 3 && s.alt < 6 ? -1.2 : -2) && s.alt < (s.vy * s.vy) / 31 * +(process.env.KB1 || 1.15) + 2.5 };
       }
     } else if (lv === 2) { const R = [[150,0],[70,0],[-10,0],[-90,0]]; const nx = R.find(q => q[0] < s.pos[2]) ?? [0, 0]; c = { throttle: 1, boost: s.gas > 0.2 && strat === 'best', steer: Math.max(-1, Math.min(1, (nx[1] - s.pos[0]) * (+process.env.SG || 0.06))) }; }
     else if (lv === 4) {

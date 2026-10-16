@@ -2,6 +2,7 @@ import type { Vehicle } from './vehicle';
 import type { Scoring } from './scoring';
 const CY = '#e8f4ff';
 export class Hud {
+  private probe: HTMLDivElement | null = null;
   ctx: CanvasRenderingContext2D;
   constructor(private cv: HTMLCanvasElement) { this.ctx = cv.getContext('2d')!; }
   gauge(x: number, y: number, r: number, label: string, unit: string, val: number, max: number, text: string) {
@@ -22,8 +23,14 @@ export class Hud {
     if (fx > 0) { c.save(); c.strokeStyle = '#e8f4ff'; c.lineWidth = 1.5; const cx = W / 2, cy = H * 0.45, n = Math.round(26 * fx);
       for (let i = 0; i < n; i++) { const a = Math.random() * Math.PI * 2, r0 = Math.max(W, H) * (0.32 + Math.random() * 0.2), len = 40 + 120 * fx * Math.random(); c.globalAlpha = 0.15 + 0.35 * fx * Math.random();
         c.beginPath(); c.moveTo(cx + Math.cos(a) * r0, cy + Math.sin(a) * r0); c.lineTo(cx + Math.cos(a) * (r0 + len), cy + Math.sin(a) * (r0 + len)); c.stroke(); } c.restore(); }
-    const r = info.compact ? Math.min(44, W / 20) : Math.min(70, W / 16); const y = info.compact ? H - r - 34 : H - r - 40; const pitch = Math.asin(Math.max(-1, Math.min(1, v.fwd.y))) * 180 / Math.PI;
-    const g0 = info.compact ? W * 0.465 - r * 3.45 : W / 2 - r * 3.4;
+    // safe-area insets (notch) + free band between joystick and touch buttons on phones
+    if (!this.probe) { this.probe = document.createElement('div'); this.probe.style.cssText = 'position:fixed;visibility:hidden;pointer-events:none;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)'; document.body.appendChild(this.probe); }
+    const ps = getComputedStyle(this.probe), iL = parseFloat(ps.paddingLeft) || 0, iR = parseFloat(ps.paddingRight) || 0;
+    const bandL = Math.max(18, iL) + (H <= 380 ? 130 : 150) + 12, bandR = W - Math.max(14, iR) - (78 * 3 + 24) - 12, band = Math.max(160, bandR - bandL);
+    const topColL = W - Math.max(14, iR) - 52 - 10; // left edge of 镜头/稳定/重置 column
+    const r0 = info.compact ? Math.min(44, W / 20, band / 9.2) : Math.min(70, W / 16);
+    const r = r0; const y = info.compact ? H - r - 34 : H - r - 40; const pitch = Math.asin(Math.max(-1, Math.min(1, v.fwd.y))) * 180 / Math.PI;
+    const g0 = info.compact ? (bandL + bandR) / 2 - r * 3.45 : W / 2 - r * 3.4;
     this.gauge(g0, y, r, 'DOWNFORCE', 'KG', v.downforceN / 9.81, 5000, Math.round(v.downforceN / 9.81).toString());
     this.gauge(g0 + r * 2.3, y, r, 'G-FORCE', 'G', v.gForce, 5, v.gForce.toFixed(1));
     this.gauge(g0 + r * 4.6, y, r, 'PITCH', 'DEG', Math.abs(pitch), 90, Math.round(pitch).toString());
@@ -40,9 +47,9 @@ export class Hud {
     c.font = '14px "Microsoft YaHei", sans-serif'; c.fillText(`关卡 ${info.level}`, 20, 58);
     info.stars.forEach((st, i) => { c.fillStyle = st.ok ? '#ffd23f' : '#667'; c.fillText(`${st.ok ? '★' : '☆'} ${st.label}`, 20, 82 + i * 20); });
     // top-right: score + combo + speed
-    c.textAlign = 'right'; c.fillStyle = CY; c.font = 'bold 28px Consolas'; c.fillText(Math.round(s.score).toString().padStart(6, '0'), W - 20, 40);
-    c.font = '15px Consolas'; const cb = s.combo; c.fillText(`RUN ${Math.round(s.stunt)}   连招 x${cb.mult}`, W - 20, 62);
-    c.fillText(`${Math.round(v.vel.length() * 3.6)} KM/H`, W - 20, 84); c.fillText(`CAM: ${info.cam}`, W - 20, 104);
+    c.textAlign = 'right'; c.fillStyle = CY; c.font = 'bold 28px Consolas'; c.fillText(Math.round(s.score).toString().padStart(6, '0'), W - 20 - iR, 40);
+    c.font = '15px Consolas'; const cb = s.combo; c.fillText(`RUN ${Math.round(s.stunt)}   连招 x${cb.mult}`, W - 20 - iR, 62);
+    c.fillText(`${Math.round(v.vel.length() * 3.6)} KM/H`, W - 20 - iR, 84); c.fillText(`CAM: ${info.cam}`, W - 20 - iR, 104);
     if (info.debug) { c.textAlign = 'left'; c.font = '12px Consolas'; c.fillStyle = '#7f7'; c.fillText(info.debug, info.compact ? W * 0.3 : 20, info.compact ? 20 : H - 8); c.textAlign = 'right'; c.fillStyle = CY; }
     // level progress bar with sections
     if (info.sections) {
@@ -62,9 +69,9 @@ export class Hud {
     // combo chain
     if (cb.chain.length) {
       c.textAlign = 'right'; c.font = `bold ${info.compact ? 13 : 16}px "Microsoft YaHei", sans-serif`; const txt = cb.chain.slice(-5).join(' → ');
-      const tw = c.measureText(txt).width + 20, cy = info.compact ? 126 : 130; c.fillStyle = 'rgba(10,14,24,0.55)'; c.fillRect(W - 14 - tw, cy - 18, tw, 46);
-      c.fillStyle = '#ff7bd5'; c.fillText(txt, W - 24, cy); c.fillStyle = '#ffd23f'; c.fillText(`连招 x${cb.mult}  +${cb.pts}`, W - 24, cy + 21);
-      const idle = Math.min(1, cb.idleT / 2); c.fillStyle = 'rgba(255,123,213,0.8)'; c.fillRect(W - 14 - tw, cy + 26, tw * (1 - idle), 3);
+      const tw = c.measureText(txt).width + 20, cy = info.compact ? 126 : 130; const rx = info.compact ? (info.radar ? topColL - 76 : topColL) : W - 14; const cxR = rx; c.fillStyle = 'rgba(10,14,24,0.55)'; c.fillRect(cxR - tw, cy - 18, tw, 46);
+      c.fillStyle = '#ff7bd5'; c.fillText(txt, cxR - 10, cy); c.fillStyle = '#ffd23f'; c.fillText(`连招 x${cb.mult}  +${cb.pts}`, cxR - 10, cy + 21);
+      const idle = Math.min(1, cb.idleT / 2); c.fillStyle = 'rgba(255,123,213,0.8)'; c.fillRect(cxR - tw, cy + 26, tw * (1 - idle), 3);
     }
     if (cb.flair > 0) { // named combo popup with flair
       const k = cb.flair / 2.2, sc = 1 + Math.max(0, k - 0.8) * 2.5; c.save(); c.translate(W / 2, H * 0.6); c.scale(sc, sc); c.rotate(Math.sin(cb.flair * 9) * 0.03 * k);
@@ -77,7 +84,7 @@ export class Hud {
     }
     // radar altitude + vertical speed + ideal brake zone
     if (info.radar) {
-      const R = info.radar, gh = Math.min(260, H * 0.42), gx = info.compact ? W - 70 : W - 90, gy = H * 0.5 - gh / 2 + 40, top = Math.max(60, Math.min(160, R.ideal * 2.2, R.alt * 1.4));
+      const R = info.radar, cTop = 108, cBot = H - Math.max(14, parseFloat(ps.paddingBottom) || 0) - 78 - 14, gh = info.compact ? Math.max(60, cBot - cTop - 52) : Math.min(260, H * 0.42), gx = info.compact ? topColL - 64 : W - 90, gy = info.compact ? cTop + 26 : H * 0.5 - gh / 2 + 40, top = Math.max(60, Math.min(160, R.ideal * 2.2, R.alt * 1.4));
       const yOf = (h: number) => gy + gh - Math.min(1, Math.max(0, h / top)) * gh;
       c.fillStyle = 'rgba(10,14,24,0.6)'; c.fillRect(gx - 8, gy - 26, 62, gh + 52); c.strokeStyle = CY; c.strokeRect(gx, gy, 14, gh);
       const b0 = yOf(R.ideal * 1.25), b1 = yOf(R.ideal * 0.8); c.fillStyle = R.inBand ? 'rgba(61,255,160,0.85)' : 'rgba(61,255,160,0.35)'; c.fillRect(gx + 1, b0, 12, Math.max(3, b1 - b0));

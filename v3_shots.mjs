@@ -34,7 +34,7 @@ if (!only || only === 'cliff') {
   }
   for (let i = 0; i < 20 && (await sim(p, 0.5, {})).st !== 'result'; i++); await sim(p, 2.1, {}); await p.waitForTimeout(800); await shot(p, 'v3_cliff_result');
   await p.fill('#nm', '阿然'); await p.click('#sv'); await p.waitForTimeout(400); await shot(p, 'v3_leaderboard_entry');
-  await p.evaluate(() => document.querySelector('#rp').click()); for (let i = 0; i < 40; i++) { await p.waitForTimeout(400); if (await p.evaluate(() => window.__game.state().pos[1] < 80 && window.__game.state().pos[2] < 0)) break; }
+  await p.evaluate(() => document.querySelector('#rp').click()); for (let i = 0; i < 200; i++) { await p.waitForTimeout(400); if (await p.evaluate(() => window.__game.state().pos[1] < 95 && window.__game.state().pos[2] < 0)) break; }
   await shot(p, 'v3_cliff_replay_cam'); await p.close();
 }
 if (!only || only === 'combo') { // named combo popup (倒挂后空翻) on L1

@@ -17,7 +17,7 @@ const css = `
 .ui .grade{font-size:clamp(60px,12vw,110px);font-weight:900;line-height:1;text-shadow:0 0 30px currentColor}
 .ui table{border-collapse:collapse;font-size:clamp(13px,2.2vw,16px)}.ui td{padding:2px 10px}.ui td:last-child{text-align:right;color:#ffc23a}
 .ui .stars{font-size:clamp(30px,6vw,44px);color:#ffc23a;letter-spacing:8px}.ui .sl{font-size:13px;color:#ccd;text-align:left}
-#menuBtn{position:fixed;left:14px;top:150px;z-index:25;touch-action:manipulation;font:13px "Microsoft YaHei",sans-serif;color:#e8f4ff;background:rgba(10,14,24,.5);border:1px solid rgba(232,244,255,.4);border-radius:8px;padding:3px 12px;cursor:pointer}.ui .lb td{padding:2px 12px}.ui .lb tr.me td{color:#3dffa0;font-weight:bold}.ui input{font:inherit;font-size:17px;padding:8px 12px;border-radius:10px;border:2px solid #ffc23a;background:rgba(0,0,0,.4);color:#fff;width:180px;text-align:center}
+#menuBtn{position:fixed;left:max(14px,env(safe-area-inset-left));top:140px;z-index:25;touch-action:manipulation;font:13px "Microsoft YaHei",sans-serif;color:#e8f4ff;background:rgba(10,14,24,.5);border:1px solid rgba(232,244,255,.4);border-radius:8px;padding:3px 12px;cursor:pointer}.ui .lb td{padding:2px 12px}.ui .lb tr.me td{color:#3dffa0;font-weight:bold}.ui input{font:inherit;font-size:17px;padding:8px 12px;border-radius:10px;border:2px solid #ffc23a;background:rgba(0,0,0,.4);color:#fff;width:180px;text-align:center}
 .ui .tabs{display:flex;gap:6px;flex-wrap:wrap;justify-content:center}.ui .tabs button{min-width:0;padding:6px 12px;font-size:14px}.ui .combo{color:#ff7bd5}.ui .daily{border-color:#ff7bd5}`;
 export interface LevelInfo { id: number; name: string; desc: string; stars: string[] }
 export class UI {

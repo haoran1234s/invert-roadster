@@ -16,7 +16,7 @@ export class CamRig {
     } else if (m === 'WIDE PROFILE') { want = new THREE.Vector3(85, 18 + p.y * 0.4, THREE.MathUtils.clamp(p.z, -700, 500)); k = 1 - Math.pow(0.05, dt); this.cam.fov = 45;
     } else if (m === 'DRONE') { want = p.clone().add(new THREE.Vector3(Math.sin(this.t * 0.3) * 22, 14, Math.cos(this.t * 0.3) * 22));
     } else if (m === 'CLIFF') { // cinematic side view tracking the drop
-      want = p.clone().add(new THREE.Vector3(38, 6 + Math.max(0, v.vel.y) * 0.2, 14 - v.vel.z * 0.15)); look = p.clone().addScaledVector(v.vel, 0.25); k = 1 - Math.pow(0.02, dt); this.cam.fov = 55;
+      want = p.clone().add(new THREE.Vector3(34, 3, 10 - v.vel.z * 0.12)); look = p.clone().add(new THREE.Vector3(v.vel.x * 0.1, 0.5 + Math.max(-3, v.vel.y * 0.05), v.vel.z * 0.1)); k = 1 - Math.pow(0.0005, dt); this.cam.fov = 50;
     } else { want = p.clone().add(new THREE.Vector3(0, 70, 0.01)); }
     if (m !== 'WIDE PROFILE' && m !== 'CLIFF') this.cam.fov = 70;
     if (snap) k = 1; this.pos.lerp(want, k); this.up.lerp(upW, 1 - Math.pow(0.02, dt)).normalize();

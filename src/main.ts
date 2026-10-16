@@ -314,7 +314,7 @@ function frame() {
       car.pos.set(rec[o], rec[o + 1], rec[o + 2]); car.quat.set(rec[o + 3], rec[o + 4], rec[o + 5], rec[o + 6]);
       car.up.set(0, 1, 0).applyQuaternion(car.quat); car.fwd.set(0, 0, -1).applyQuaternion(car.quat);
       car.mesh.position.copy(car.pos); car.mesh.quaternion.copy(car.quat);
-      const cam = L.cliffZ !== undefined && rec[o + 2] < L.cliffZ + 30 && rec[o + 1] > 22 ? 4 : Math.floor(i / 180) % 3; if (cam !== replayCam) { replayCam = cam; rig.mode = cam === 4 ? 4 : [0, 1, 2][cam]; }
+      const cam = L.cliffZ !== undefined && rec[o + 2] < L.cliffZ + 30 && rec[o + 1] > 22 ? 4 : Math.floor(i / 180) % 3; if (cam !== replayCam) { replayCam = cam; rig.mode = cam === 4 ? 4 : [0, 1, 2][cam]; rig.update(1 / 60, car, true); }
     }
   } else if (!forced && ready && !ui.open) { acc += dt; let n = 0; while (acc >= 1 / 60 && n < 5) { fixedStep(c); acc -= 1 / 60; n++; } if (n === 5) acc = 0; }
   if (!lookLock) rig.update(rdt, car);

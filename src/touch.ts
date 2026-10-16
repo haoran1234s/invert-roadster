@@ -16,9 +16,10 @@ const css = `
 #tc .hint{animation:hg .7s ease-in-out infinite alternate;border-color:#ffc23a!important;box-shadow:0 0 18px 6px rgba(255,194,58,.7)}
 #tc .hint::after{content:'▼';position:absolute;transform:translateY(-62px);color:#ffc23a;font-size:26px;animation:ha .7s ease-in-out infinite alternate;text-shadow:0 0 8px #000}
 #tc .stick.hint::after{left:50%;top:-30px;transform:translateX(-50%)}
+@media (max-height:380px){#tc .stick{width:130px;height:130px}}
 @keyframes hg{from{transform:scale(1)}to{transform:scale(1.12)}}@keyframes ha{from{margin-top:0}to{margin-top:-10px}}
-#tc .top{position:absolute;right:max(14px,env(safe-area-inset-right));top:120px;display:flex;flex-direction:column;gap:8px}
-#tc .top .b{width:52px;height:40px;border-radius:10px;font-size:12px}
+#tc .top{position:absolute;right:max(14px,env(safe-area-inset-right));top:110px;display:flex;flex-direction:column;gap:6px}
+#tc .top .b{width:52px;height:36px;border-radius:10px;font-size:12px}
 body.menu-open #tc,body.menu-open canvas{pointer-events:none!important;visibility:hidden}
 body.menu-open canvas{visibility:visible;pointer-events:none!important}
 body.menu-open #rot{display:none!important}
