@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import RAPIER from '@dimforge/rapier3d-compat';
+import RAPIER from '@dimforge/rapier3d';
 export interface LevelData { id: string; name: string; desc: string; start: { pos: number[]; yawDeg: number }; runway: { length: number; width: number; zStart: number; lightSpacing: number }; ramps: { z0: number; x?: number; radius: number; width: number; endDeg: number; segments: number }[]; zones?: { x: number; z: number; w: number; l: number; label?: string; precise?: boolean }[]; rings?: { pos: number[]; r: number; type: 'boost' | 'hover' | 'gate'; hold?: number }[]; finishZ?: number; timeLimit?: number; tankSec?: number; maxAir?: number; sections?: boolean; hint?: string; hintTouch?: string; checkpoints: { pos: number[]; yawDeg: number; z: number }[]; stars: { label: string; all: { t: string; v?: any }[] }[];
   env?: { sky?: number[]; fog?: number[]; ground?: 'grid' | 'sand' | 'rock' | 'asphalt'; hemi?: number[]; key?: number[]; rim?: number[]; skyImage?: string; rain?: boolean; exposure?: number; stars?: boolean };
   plateaus?: { z0: number; z1: number; y: number; w?: number }[]; cliffZ?: number; walls?: { side: number; x0: number; z0: number; z1: number; radius: number; endDeg: number }[];

@@ -13,7 +13,7 @@ export class Hud {
     c.textAlign = 'center'; c.font = `bold ${r * 0.34}px Consolas, monospace`; c.fillText(text, x, y + r * 0.1);
     c.font = `${r * 0.16}px Consolas, monospace`; c.globalAlpha = 0.8; c.fillText(unit, x, y + r * 0.38); c.fillText(label, x, y + r + r * 0.28); c.globalAlpha = 1;
   }
-  draw(v: Vehicle, s: Scoring, info: { cam: string; level: string; stars: { label: string; ok: boolean }[]; hint: string; fps: number; debug?: string; compact?: boolean; sections?: string[]; phase?: number; phaseFrac?: number; banner?: string; bannerA?: number; objective?: string; speedFx?: number; radar?: { alt: number; vy: number; ideal: number; inBand: boolean; prompt: string } }) {
+  draw(v: Vehicle, s: Scoring, info: { cam: string; level: string; stars: { label: string; ok: boolean }[]; hint: string; fps: number; debug?: string; compact?: boolean; sections?: string[]; phase?: number; phaseFrac?: number; banner?: string; bannerA?: number; objective?: string; speedFx?: number; radar?: { alt: number; vy: number; ideal: number; inBand: boolean; prompt: string }; prompt?: { text: string; key: string; mobile: boolean; t: number; tut: boolean } }) {
     const cv = this.cv, c = this.ctx, dpr = Math.min(devicePixelRatio || 1, info.compact ? 1.5 : 2); const W = innerWidth, H = innerHeight;
     if (cv.width !== W * dpr) { cv.width = W * dpr; cv.height = H * dpr; cv.style.width = W + 'px'; cv.style.height = H + 'px'; }
     c.setTransform(dpr, 0, 0, dpr, 0, 0); c.clearRect(0, 0, W, H);
@@ -86,6 +86,20 @@ export class Hud {
       c.textAlign = 'left'; c.font = 'bold 12px Consolas'; c.fillStyle = CY; c.fillText('RADAR', gx - 4, gy - 12); c.fillText(`${R.alt.toFixed(0)}m`, gx + 22, my2 + 18);
       c.fillStyle = R.vy < -14 ? '#f55' : R.vy < -5 ? '#ffc23a' : '#3dffa0'; c.fillText(`${R.vy.toFixed(1)}`, gx - 4, gy + gh + 16); c.font = '10px Consolas'; c.fillText('m/s', gx + 34, gy + gh + 16);
       if (R.prompt) { c.textAlign = 'center'; c.font = `900 ${info.compact ? 22 : 30}px "Microsoft YaHei", sans-serif`; c.fillStyle = R.inBand ? '#3dffa0' : '#ff5050'; c.fillText(R.prompt, W / 2, H * 0.72); }
+    }
+    // contextual action prompt: big centered key cap + text (mobile: button glows, arrow drawn by CSS)
+    if (info.prompt) {
+      const P = info.prompt, a = Math.min(1, P.t * 4), pulse = 1 + Math.sin(P.t * 8) * 0.04, cy = H * (info.compact ? 0.56 : 0.6);
+      c.save(); c.globalAlpha = a; c.translate(W / 2, cy); c.scale(pulse, pulse); c.textAlign = 'left'; c.textBaseline = 'middle';
+      const fs = info.compact ? 26 : 38; c.font = `900 ${fs}px "Microsoft YaHei", sans-serif`; const tw = c.measureText(P.text).width;
+      const kf = `bold ${info.compact ? 20 : 28}px "Microsoft YaHei", Consolas, sans-serif`; c.font = kf; const kw = P.mobile ? 0 : c.measureText(P.key).width + 28;
+      const total = tw + (kw ? kw + 16 : 0) + 48, hh = fs + 34;
+      c.fillStyle = P.tut ? 'rgba(255,120,40,0.9)' : 'rgba(10,14,24,0.82)'; c.strokeStyle = '#ffc23a'; c.lineWidth = 3; c.shadowColor = '#ffc23a'; c.shadowBlur = 18; c.beginPath(); c.roundRect(-total / 2, -hh / 2, total, hh, 14); c.fill(); c.stroke(); c.shadowBlur = 0;
+      let x = -total / 2 + 20;
+      if (kw) { c.fillStyle = '#e8f4ff'; c.beginPath(); c.roundRect(x, -hh / 2 + 8, kw, hh - 16, 8); c.fill(); c.fillStyle = '#9aa'; c.fillRect(x + 3, hh / 2 - 12, kw - 6, 3); c.fillStyle = '#10141c'; c.font = kf; c.fillText(P.key, x + 14, 1); x += kw + 16; }
+      c.fillStyle = '#fff'; c.font = `900 ${fs}px "Microsoft YaHei", sans-serif`; c.fillText(P.text, x, 1);
+      if (P.tut) { c.font = `bold ${info.compact ? 12 : 14}px "Microsoft YaHei", sans-serif`; c.fillStyle = '#ffd23f'; c.textAlign = 'center'; c.fillText('教学：做出提示操作后继续', 0, hh / 2 + 16); }
+      c.restore(); c.textBaseline = 'alphabetic';
     }
     // messages
     c.textAlign = 'center'; c.font = 'bold 22px "Microsoft YaHei", sans-serif';

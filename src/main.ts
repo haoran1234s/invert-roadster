@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import RAPIER from '@dimforge/rapier3d-compat';
+import RAPIER from '@dimforge/rapier3d';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
@@ -14,13 +14,13 @@ import { Vapor } from './particles';
 import { Scoring, GRADE_MULT, GRADE_RANK, type Landing } from './scoring';
 import { Hud } from './hud';
 import { CamRig, CAMS } from './camera';
-import { initTouch, isTouch, touch, setMenuOpen } from './touch';
+import { initTouch, isTouch, touch, setMenuOpen, setHintButton } from './touch';
 import { readControls, pressedOnce, emptyControls, type Controls } from './input';
-import { loadQuality, saveStars, unlocked, loadProgress, type QName } from './quality';
+import { loadQuality, saveStars, unlocked, loadProgress, saveAutoQuality, ORDER, gpuTier, type QName } from './quality';
 import { UI } from './ui';
 import { dailyLevel, MODS } from './daily';
 
-await RAPIER.init();
+// rapier (non-compat) initialises its .wasm on import
 const LEVELS = Object.values(import.meta.glob('./data/levels/*.json', { eager: true, import: 'default' }) as Record<string, LevelData>).sort((a, b) => +a.id.slice(1) - +b.id.slice(1));
 const Q = new URLSearchParams(location.search);
 const DAILY = Q.has('daily');
@@ -43,7 +43,7 @@ let gtao: GTAOPass | null = null;
 if (QUAL.gtao) { gtao = new GTAOPass(scene, camera, innerWidth, innerHeight); gtao.blendIntensity = 0.85; gtao.updateGtaoMaterial({ radius: 0.6, distanceExponent: 1, thickness: 1, scale: 1, samples: 12 }); composer.addPass(gtao); }
 const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.45, 0.4, 0.9); bloom.enabled = QUAL.bloom; composer.addPass(bloom);
 composer.addPass(new OutputPass());
-let scale = 1;
+let scale = 1; let ready = false;
 function applySize() {
   const pr = BASE_DPR * scale; renderer.setPixelRatio(pr); composer.setPixelRatio(pr);
   renderer.setSize(innerWidth, innerHeight); composer.setSize(innerWidth, innerHeight);
@@ -51,16 +51,29 @@ function applySize() {
   camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
 }
 applySize(); addEventListener('resize', applySize); addEventListener('orientationchange', () => setTimeout(applySize, 200));
-// adaptive safety net: only when fps is bad (>40ms avg over 3s): AO off -> shadows lower/off -> resolution down
-let qT = 0, qN = 0, qSum = 0, downgrades: string[] = [];
+// adaptive quality: 1 s windows; step down when avg > 22 ms or >= 4 spikes > 33 ms; step up only after 8 s of headroom; backs off if it thrashes
+let qT = 0, qN = 0, qSum = 0, qSpk = 0, good = 0, lvlIdx = 0, upBlockT = 0, upBackoff = 8, lastUpT = -1e9, clock = 0; const downgrades: string[] = [];
+type Step = { n: string; ok: () => boolean; down: () => void; up: () => void };
+const setShadow = (sz: number) => { key.shadow.mapSize.set(sz, sz); key.shadow.map?.dispose(); key.shadow.map = null as any; };
+const LADDER: Step[] = [
+  { n: 'AO', ok: () => !!gtao?.enabled, down: () => { gtao!.enabled = false; }, up: () => { gtao!.enabled = true; } },
+  { n: '阴影1024', ok: () => key.castShadow && key.shadow.mapSize.x > 1024, down: () => setShadow(1024), up: () => setShadow(2048) },
+  { n: '分辨率0.85', ok: () => scale > 0.85, down: () => { scale = 0.85; applySize(); }, up: () => { scale = 1; applySize(); } },
+  { n: '泛光关', ok: () => bloom.enabled, down: () => { bloom.enabled = false; }, up: () => { bloom.enabled = true; } },
+  { n: '分辨率0.7', ok: () => scale > 0.7, down: () => { scale = 0.7; applySize(); }, up: () => { scale = 0.85; applySize(); } },
+  { n: '阴影关', ok: () => key.castShadow, down: () => { key.castShadow = false; }, up: () => { key.castShadow = true; } },
+  { n: '分辨率0.6', ok: () => scale > 0.6, down: () => { scale = 0.6; applySize(); }, up: () => { scale = 0.7; applySize(); } },
+];
+const applied: Step[] = [];
 function adapt(dtMs: number) {
-  if (Q.has('noadapt')) return; qSum += dtMs; qN++; qT += dtMs; if (qT < 3000) return;
-  const avg = qSum / qN; qT = qSum = qN = 0; if (avg <= 40) return;
-  if (gtao?.enabled) { gtao.enabled = false; downgrades.push('AO'); }
-  else if (key.castShadow && key.shadow.mapSize.x > 1024) { key.shadow.mapSize.set(1024, 1024); key.shadow.map?.dispose(); key.shadow.map = null as any; downgrades.push('阴影1024'); }
-  else if (scale > 0.6) { scale = Math.max(0.6, scale * 0.85); applySize(); downgrades.push('分辨率' + scale.toFixed(2)); }
-  else if (key.castShadow) { key.castShadow = false; downgrades.push('阴影关'); }
-  else if (bloom.enabled) { bloom.enabled = false; downgrades.push('泛光关'); }
+  if (Q.has('noadapt') || !ready || ui?.open) return; clock += dtMs / 1000;
+  qSum += dtMs; qN++; qT += dtMs; if (dtMs > 33) qSpk++; if (qT < 1000) return;
+  const avg = qSum / qN, spikes = qSpk; qT = qSum = qN = qSpk = 0;
+  if (avg > 22 || spikes >= 4) {
+    good = 0; const st = LADDER.find(x => x.ok()); if (!st) return; st.down(); applied.push(st); downgrades.push(st.n);
+    if (clock - lastUpT < 20) { upBackoff = Math.min(120, upBackoff * 2); } // thrash guard
+  } else if (avg < 13 && spikes === 0) { if (++good >= upBackoff && applied.length) { const st = applied.pop()!; st.up(); downgrades.push('↑' + st.n); lastUpT = clock; good = 0; } }
+  else good = 0;
 }
 initTouch(Q.has('touch'));
 const world = new RAPIER.World({ x: 0, y: -9.81 * GRAV, z: 0 }); world.timestep = 1 / 60;
@@ -71,19 +84,19 @@ envScene.add(new THREE.Mesh(new THREE.SphereGeometry(50, 32, 16), (scene.userDat
 const gnd = new THREE.Mesh(new THREE.CircleGeometry(49, 32).rotateX(-Math.PI / 2), new THREE.MeshBasicMaterial({ color: 0x4b5361 })); gnd.position.y = -2; envScene.add(gnd);
 const envTex = pm.fromScene(envScene, 0.02, 0.1, 200).texture; scene.environment = envTex; scene.environmentIntensity = 0.5;
 // optional equirect skybox (Hunyuan World panorama): replaces sky dome + env map when it loads
-const SKY = L.env?.skyImage ? (/\.\w+$/.test(L.env.skyImage) ? L.env.skyImage : `${L.env.skyImage}_${MOBILE || QUAL.name === '中' ? '2k' : '4k'}.webp`) : '';
+const SKY = L.env?.skyImage ? (/\.\w+$/.test(L.env.skyImage) ? L.env.skyImage : `${L.env.skyImage}_${MOBILE ? '2k' : QUAL.sky}.webp`) : '';
 let skyOk = !SKY;
 if (SKY) new THREE.TextureLoader().load(SKY, t => { skyOk = true; t.mapping = THREE.EquirectangularReflectionMapping; t.colorSpace = THREE.SRGBColorSpace; scene.background = t; const sky = scene.userData.sky as THREE.Object3D; if (sky) sky.visible = false; const e = pm.fromEquirectangular(t).texture; scene.environment = e; }, undefined, () => { skyOk = true; console.warn('skyImage missing', SKY); });
 if (L.env?.exposure) renderer.toneMappingExposure = L.env.exposure;
 // shadows: key light follows the car
 const key = scene.userData.key as THREE.DirectionalLight; const KOFF = new THREE.Vector3(-120, 160, 120).normalize().multiplyScalar(150);
 key.castShadow = QUAL.shadow > 0; key.shadow.mapSize.set(QUAL.shadow || 1, QUAL.shadow || 1);
-Object.assign(key.shadow.camera, { left: -40, right: 40, top: 40, bottom: -40, near: 10, far: 400 }); key.shadow.camera.updateProjectionMatrix(); key.shadow.bias = -0.0004; key.shadow.normalBias = 0.04;
-const V: any = { ...vehicleData, modelOverride: QUAL.carLod === 'hi' ? (MOBILE ? 'models/roadster_mobilehi.glb' : 'models/roadster_hi.glb') : '' };
+const SR = QUAL.shadowRange; Object.assign(key.shadow.camera, { left: -SR, right: SR, top: SR, bottom: -SR, near: 10, far: 400 }); key.shadow.camera.updateProjectionMatrix(); key.shadow.bias = -0.0004; key.shadow.normalBias = 0.04;
+const V: any = { ...vehicleData, modelOverride: QUAL.carLod === 'hi' ? (MOBILE ? 'models/roadster_mobilehi.glb' : 'models/roadster_hi.glb') : QUAL.carLod === 'mid' ? 'models/roadster_desktop.glb' : 'models/roadster_mobile.glb' };
 const TM = (L as any).thrustMult ?? 1;
 const car = new Vehicle(V, { ...thrusterData, tankSec: L.tankSec ?? thrusterData.tankSec, liftG: thrusterData.liftG * TM, boostG: thrusterData.boostG * TM, retroG: 2.6 * TM } as any, world, scene, envTex);
 let sceneryLoaded = -1;
-const sceneryDir = QUAL.name === '中' && MOBILE ? 'models/mobile/' : 'models/desktop/';
+const sceneryDir = QUAL.carLod === 'low' || (MOBILE && QUAL.carLod !== 'hi') ? 'models/mobile/' : 'models/desktop/';
 if (!Q.has('greybox') && L.scenery !== false) loadScenery(sceneryDir, scene, handles, L.runway, envTex).then(n => sceneryLoaded = n); else sceneryLoaded = 0;
 if (L.scenery === false) sceneryLoaded = 0;
 if (!Q.has('greybox')) loadGLB(sceneryDir + 'wheel.glb').then(w => car.setWheelModel(w)).catch(e => console.warn('wheel model failed', e));
@@ -263,11 +276,35 @@ const _obs = new MutationObserver(_syncPe); _obs.observe(ui.root, { attributes: 
 
 let forced: Controls | null = null; let acc = 0; let last = performance.now(); let fps = 60; let fc = 0, ft = 0;
 const ftimes: number[] = []; let lookLock = false;
+// ---------- loading bar + shader warm-up ----------
+const loadEl = document.createElement('div'); loadEl.id = 'load';
+loadEl.innerHTML = '<div style="font:bold 22px \'Microsoft YaHei\',sans-serif;letter-spacing:4px">倒悬极速 · 加载中</div><div style="width:min(420px,70vw);height:8px;border:1px solid #9ab;border-radius:5px;margin-top:14px"><i style="display:block;height:100%;width:0;background:#ffc23a;border-radius:4px;transition:width .2s"></i></div><small style="margin-top:8px;opacity:.6"></small>';
+Object.assign(loadEl.style, { position: 'fixed', inset: '0', zIndex: '30', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: '#05070d', color: '#e8f4ff' });
+document.body.appendChild(loadEl);
+let warmMs = 0, firstThrustMs = -1, firstThrustSeen = false, benchT = 0; const bench: number[] = [];
+async function warmup() {
+  const t0 = performance.now();
+  // emit every particle effect once so their shaders/buffers are live, then compile everything off the critical path
+  const pp = car.pos.clone(); flame.emit(pp, tmp.set(0, -1, 0), 0.05, 0); vapor.emit(pp, tmp, 0.05, 0); dust.emit(pp, tmp, 0.05, 0);
+  const wasThr = car.thrusting; car.thrusting = true;
+  try { await (renderer as any).compileAsync?.(scene, camera); } catch {}
+  composer.render(); car.thrusting = wasThr; warmMs = performance.now() - t0;
+}
+(async () => {
+  const bar = loadEl.querySelector('i') as HTMLElement, txt = loadEl.querySelector('small') as HTMLElement; const t0 = performance.now();
+  while (!(car.modelLoaded && skyOk && sceneryLoaded >= 0 && (car.wheelModel || Q.has('greybox') || performance.now() - t0 > 20000)) && performance.now() - t0 < 30000) {
+    const n = +car.modelLoaded + +skyOk + +(sceneryLoaded >= 0) + +(car.wheelModel || Q.has('greybox')); bar.style.width = (n / 5 * 100) + '%'; txt.textContent = ['车辆模型', '天空全景', '场景', '车轮'].filter((_, i) => ![car.modelLoaded, skyOk, sceneryLoaded >= 0, car.wheelModel][i]).join(' · ');
+    await new Promise(r => setTimeout(r, 100));
+  }
+  bar.style.width = '90%'; txt.textContent = '预编译着色器…'; await warmup(); bar.style.width = '100%';
+  ready = true; loadEl.remove(); last = performance.now();
+})();
 function frame() {
   const now = performance.now(); const rdt = Math.min(0.1, (now - last) / 1000); ftimes.push(now - last); adapt(now - last); if (ftimes.length > 600) ftimes.shift(); last = now; fc++; ft += rdt; if (ft > 0.5) { fps = Math.round(fc / ft); fc = 0; ft = 0; }
   const c = forced ?? (ui.open ? emptyControls() : mergeTouch(readControls()));
   while (pressedOnce.length) { const k = pressedOnce.shift(); if (k === 'KeyR') { if (ui.open) ui.close(); reset(); } if (k === 'KeyC') rig.next(); if (k === 'KeyG') { assist = !assist; localStorage.setItem('invert.assist', assist ? '1' : '0'); score.msg(`喷气缓降辅助：${assist ? '开' : '关'}`); } if (k === 'KeyT') car.V.air.stabilize = car.V.air.stabilize ? 0 : 3; }
-  const ts = slowT > 0 ? 0.3 : 1; slowT = Math.max(0, slowT - rdt); const dt = rdt * ts;
+  updatePrompt(c);
+  const ts = tutWait ? 0.12 : slowT > 0 ? 0.3 : 1; slowT = Math.max(0, slowT - rdt); const dt = rdt * ts;
   if (st === 'replay') {
     replayI += rdt * 60; const i = Math.floor(replayI);
     if (i >= recN - 1) { st = 'result'; car.sync(); showResult(); }
@@ -279,17 +316,60 @@ function frame() {
       car.mesh.position.copy(car.pos); car.mesh.quaternion.copy(car.quat);
       const cam = L.cliffZ !== undefined && rec[o + 2] < L.cliffZ + 30 && rec[o + 1] > 22 ? 4 : Math.floor(i / 180) % 3; if (cam !== replayCam) { replayCam = cam; rig.mode = cam === 4 ? 4 : [0, 1, 2][cam]; }
     }
-  } else if (!forced) { acc += dt; let n = 0; while (acc >= 1 / 60 && n < 5) { fixedStep(c); acc -= 1 / 60; n++; } if (n === 5) acc = 0; }
+  } else if (!forced && ready && !ui.open) { acc += dt; let n = 0; while (acc >= 1 / 60 && n < 5) { fixedStep(c); acc -= 1 / 60; n++; } if (n === 5) acc = 0; }
   if (!lookLock) rig.update(rdt, car);
   key.position.copy(car.pos).add(KOFF); key.target.position.copy(car.pos); key.target.updateMatrixWorld();
   (scene.userData.sky as THREE.Object3D)?.position.copy(camera.position);
   if (rain) { const a = rain.geometry.attributes.position as THREE.BufferAttribute; const arr = a.array as Float32Array; for (let i = 0; i < arr.length; i += 3) { arr[i + 1] -= 40 * rdt; if (arr[i + 1] < -40) arr[i + 1] += 80; } a.needsUpdate = true; rain.position.copy(camera.position); }
   render();
+  if (ready && !ui.open && st === 'play' && !forced) {
+    if (benchT < 3) { benchT += rdt; bench.push(now - (frame as any).prev || 16); if (benchT >= 3 && QUAL.auto) { const m = [...bench].sort((a, b) => a - b)[bench.length >> 1]; const i = ORDER.indexOf(QUAL.name as QName); saveAutoQuality(m > 28 && i < ORDER.length - 1 ? ORDER[i + 1] : QUAL.name as QName); } }
+    if (car.thrusting && !firstThrustSeen) { firstThrustSeen = true; firstThrustMs = -2; } else if (firstThrustMs === -2) firstThrustMs = performance.now() - now;
+  }
+  (frame as any).prev = now;
   requestAnimationFrame(frame);
 }
 renderer.info.autoReset = false;
 const HINT = MOBILE ? '' : 'W/S 油门刹车  A/D 转向  Shift 吸地  空格 推进器  方向键/QE 空中姿态  F 喷射  C 镜头  R 重来  Esc 菜单';
 const starInfo = L.stars.map((s, i) => ({ label: s.label, ok: best > i }));
+const HINTS = localStorage.getItem('invert.hints') !== '0';
+const TUT = LVL === 1 && !localStorage.getItem('invert.tut1') && !Q.has('notut');
+let promptId = '', promptT = 0, promptT0 = 0, tutWait = '' as string; const tutDone = new Set<string>();
+type Pr = { id: string; text: string; key: string; btn: 'stick' | 'fan' | 'boost' | 'thrust' | ''; need?: (c: Controls) => boolean };
+const PR: Record<string, Pr> = {
+  go: { id: 'go', text: MOBILE ? '摇杆向上 加速' : '按住 加速', key: 'W', btn: 'stick', need: c => c.throttle > 0.5 },
+  ramp: { id: 'ramp', text: '按住 吸地 贴紧弯道', key: 'Shift', btn: 'fan', need: c => c.fan },
+  inv: { id: 'inv', text: '继续吸地 · 倒挂中', key: 'Shift', btn: 'fan', need: c => c.fan },
+  flip: { id: 'flip', text: MOBILE ? '摇杆 空翻 / 侧翻' : '方向键 空翻 / 侧翻', key: '↑↓←→', btn: 'stick', need: c => !!(c.pitch || c.roll) },
+  brake: { id: 'brake', text: '按住 喷气缓降', key: '空格', btn: 'thrust', need: c => c.thrust },
+  land: { id: 'land', text: '保持水平 · 准备着陆', key: '空格', btn: 'thrust' },
+  ring: { id: 'ring', text: MOBILE ? '摇杆转向 穿过光环' : '转向 穿过光环', key: 'A / D', btn: 'stick' },
+  hover: { id: 'hover', text: '按住 推进 悬停在光圈里', key: '空格', btn: 'thrust' },
+  wall: { id: 'wall', text: MOBILE ? '摇杆左右 冲上弯墙' : '转向 冲上弯墙', key: 'A / D', btn: 'stick' },
+  cliff: { id: 'cliff', text: '全油门 冲下悬崖！', key: 'W', btn: 'stick' },
+  boost: { id: 'boost', text: '按 喷射 加速', key: 'F', btn: 'boost' },
+};
+function pickPrompt(): Pr | null {
+  if (st !== 'play' || ui.open) return null;
+  const A = L.ramps[0]; const ih = idealH();
+  if (!car.grounded && car.vel.y < -3 && alt < Math.max(8, ih * 1.3) && car.up.y > 0.5 && alt > 1.5 && (alt > 6 || car.vel.y < -4)) return PR.brake;
+  if (car.grounded && car.normal.y < -0.2) return PR.inv;
+  if (!car.grounded && airT > 0.5 && alt > 12 && car.vel.y > -6 && (A || L.cliffZ !== undefined)) return PR.flip;
+  if (hoverRings.length && hoverIdx < hoverRings.length) return PR.hover;
+  if (car.grounded && A && phase <= 1 && car.pos.z - A.z0 < 70 && car.pos.z > A.z0 - 5 && A.endDeg > 90) return PR.ramp;
+  if (car.grounded && L.cliffZ !== undefined && car.pos.z - L.cliffZ < 90 && car.pos.z > L.cliffZ) return PR.cliff;
+  if (car.grounded && L.walls?.length && Math.abs(car.normal.x) < 0.3 && car.pos.z < 200 && car.pos.z > 60) return PR.wall;
+  const nr = rings.findIndex((r, i) => !ringDone[i] && r.type !== 'hover' && car.pos.z - r.pos[2] > 0 && car.pos.z - r.pos[2] < 60); if (nr >= 0) return PR.ring;
+  if (car.grounded && runT < 4 && car.vel.length() < 20) return PR.go;
+  return null;
+}
+function updatePrompt(c: Controls) {
+  const pr = HINTS ? pickPrompt() : null; const id = pr?.id ?? '';
+  if (id !== promptId) { promptId = id; promptT0 = performance.now(); setHintButton(MOBILE ? pr?.btn ?? '' : ''); } promptT = (performance.now() - promptT0) / 1000;
+  // L1 first-play tutorial: slow time until the right input is given the first time
+  if (TUT && pr?.need && ['go', 'ramp', 'flip', 'brake'].includes(id) && !tutDone.has(id)) { if (pr.need(c)) { tutDone.add(id); tutWait = ''; } else tutWait = id; } else tutWait = '';
+  if (TUT && st !== 'play' && tutDone.size >= 3) localStorage.setItem('invert.tut1', '1');
+}
 function objective(): string {
   const parts: string[] = [];
   if (L.timeLimit || L.finishZ !== undefined) parts.push(`用时 ${runT.toFixed(1)}s${L.timeLimit ? ' / ' + L.timeLimit + 's' : ''}`);
@@ -301,7 +381,7 @@ function render() {
   renderer.info.reset(); composer.render();
   const sp = car.vel.length();
   const ih = idealH(); const showRadar = st !== 'replay' && !car.grounded && (alt > 12 || L.cliffZ !== undefined) && car.vel.y < -2;
-  hud.draw(car, score, { radar: showRadar ? { alt, vy: car.vel.y, ideal: ih, inBand: alt < ih * 1.25 && alt > ih * 0.8, prompt: car.retro ? '反推中' : alt < ih * 1.25 ? (alt < ih * 0.8 ? '太晚了！全力反推！' : '现在反推！') : '' } : undefined, cam: CAMS[rig.mode], level: DAILY ? L.name : `L${LVL} ${L.name}`, stars: starInfo, fps, hint: HINT,
+  hud.draw(car, score, { prompt: promptId ? { text: PR[promptId].text, key: PR[promptId].key, mobile: MOBILE, t: promptT, tut: !!tutWait } : undefined, radar: showRadar ? { alt, vy: car.vel.y, ideal: ih, inBand: alt < ih * 1.25 && alt > ih * 0.8, prompt: promptId === 'brake' ? '' : car.retro ? '反推中' : alt < ih * 1.25 ? (alt < ih * 0.8 ? '太晚了！全力反推！' : '现在反推！') : '' } : undefined, cam: CAMS[rig.mode], level: DAILY ? L.name : `L${LVL} ${L.name}`, stars: starInfo, fps, hint: HINT,
     debug: DEBUG ? `${fps} FPS  ${(ftimes[ftimes.length - 1] ?? 0).toFixed(1)}ms  calls ${renderer.info.render.calls}  tris ${renderer.info.render.triangles}  画质 ${QUAL.name} x${(BASE_DPR * scale).toFixed(2)} ${downgrades.join(',')}` : '',
     compact: MOBILE, sections: L.sections ? SECTIONS : undefined, phase, phaseFrac, objective: objective(),
     banner: banner > 0 && st === 'play' && !ui.open ? (MOBILE ? L.hintTouch ?? L.hint ?? '' : L.hint ?? '') : '', bannerA: Math.min(1, banner), speedFx: st === 'replay' ? 0 : THREE.MathUtils.clamp((sp - 38) / 35, 0, 1) });
@@ -321,10 +401,12 @@ reset();
 (window as any).__game = {
   level: LVL, levelId: L.id, ldesc: (L as any).tpl ?? '', board: BOARD, quality: QUAL.name, setAssist(v: boolean) { assist = v; }, idealH,
   sim(sec: number, c: Partial<Controls>) { forced = { ...emptyControls(), ...c }; for (let i = 0; i < Math.round(sec * 60); i++) fixedStep(forced); rig.update(1 / 60, car, true); },
+  stats() { const a = [...ftimes].sort((x, y) => x - y); const q = (f: number) => +(a[Math.min(a.length - 1, Math.floor(a.length * f))] ?? 0).toFixed(1); return { n: a.length, p50: q(0.5), p95: q(0.95), max: q(1), hitches: ftimes.filter(x => x > 50).length, warmMs: +warmMs.toFixed(0), firstThrustMs: +firstThrustMs.toFixed(1), quality: QUAL.name, auto: QUAL.auto, gpu: gpuTier().renderer, downgrades }; },
+  ready: () => ready, prompt: () => promptId,
   perf() { const a = ftimes.slice(-120); return { avgMs: +(a.reduce((x, y) => x + y, 0) / a.length).toFixed(1), calls: renderer.info.render.calls, scale: +(BASE_DPR * scale).toFixed(2), quality: QUAL.name, downgrades, touch: { ...touch }, tris: renderer.info.render.triangles, w: renderer.domElement.width, h: renderer.domElement.height }; },
   look(p: number[], t: number[]) { lookLock = true; forced = emptyControls(); rig.mode = 0; camera.position.fromArray(p); camera.up.set(0, 1, 0); camera.lookAt(t[0], t[1], t[2]); (scene.userData.sky as THREE.Object3D)?.position.copy(camera.position); render(); },
   release() { forced = null; }, setCam(i: number) { rig.mode = i; rig.update(1 / 60, car, true); }, reset, replay: startReplay, showResult, ui,
   result: () => result, recN: () => recN,
-  modelLoaded: () => car.modelLoaded && skyOk && sceneryLoaded >= 0 && (car.wheelModel || Q.has('greybox')),
+  modelLoaded: () => ready && car.modelLoaded && skyOk && sceneryLoaded >= 0 && (car.wheelModel || Q.has('greybox')),
   state: () => ({ st, phase: SECTIONS[phase], pos: car.pos.toArray().map(x => +x.toFixed(2)), up: car.up.toArray().map(x => +x.toFixed(2)), normal: car.normal.toArray().map(x => +x.toFixed(2)), speed: +car.vel.length().toFixed(1), vy: +car.vel.y.toFixed(1), vx: +car.vel.x.toFixed(1), grounded: car.grounded, contacts: car.contacts, gas: +car.gas.toFixed(2), df: Math.round(car.downforceN / 9.81), score: Math.round(score.score), stunt: Math.round(score.stunt), inv: +score.bestInverted.toFixed(2), flips: score.flips, alt: +alt.toFixed(1), retro: car.retro, combo: { chain: [...score.combo.chain], mult: score.combo.mult, all: score.combo.all() }, runT: +runT.toFixed(2), rings: [...ringDone], hoverIdx, hoverT: +hoverT.toFixed(2), crashed: score.crashed, landing: score.landing, msgs: score.msgs.map(m => m.t) }),
 };

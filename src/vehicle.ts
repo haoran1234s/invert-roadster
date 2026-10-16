@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import RAPIER from '@dimforge/rapier3d-compat';
+import RAPIER from '@dimforge/rapier3d';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
 import { isTouch } from './touch';
@@ -153,7 +153,7 @@ export class Vehicle {
     if (c.thrust && this.gas > 0) {
       this.thrusting = true;
       if (!contacts && this.vel.y < -1 && this.up.y > 0.7) { // 喷气缓降: strong vertical retro-thrust while falling nose-level
-        this.retro = true; this.gas -= dt / T.tankSec * 1.4; b.applyImpulse(new THREE.Vector3(0, (T.retroG ?? 2.6) * this.G * m * dt, 0), true);
+        this.retro = true; this.gas -= dt / T.tankSec * 1.4; b.applyImpulse({ x: 0, y: (T.retroG ?? 2.6) * this.G * m * dt, z: 0 }, true);
       } else { this.gas -= dt / T.tankSec; b.applyImpulse(this.up.clone().multiplyScalar(T.liftG * this.G * m * dt), true); }
     }
     if (this.extBoost > 0) { this.extBoost -= dt; this.boosting = true; b.applyImpulse(this.fwd.clone().multiplyScalar(T.boostG * 1.6 * G * m * dt), true); }

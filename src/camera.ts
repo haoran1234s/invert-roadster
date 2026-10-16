@@ -20,6 +20,6 @@ export class CamRig {
     } else { want = p.clone().add(new THREE.Vector3(0, 70, 0.01)); }
     if (m !== 'WIDE PROFILE' && m !== 'CLIFF') this.cam.fov = 70;
     if (snap) k = 1; this.pos.lerp(want, k); this.up.lerp(upW, 1 - Math.pow(0.02, dt)).normalize();
-    this.cam.position.copy(this.pos); if (this.shake > 0.001) { const a = this.shake * 0.35; this.cam.position.add(new THREE.Vector3((Math.random() - 0.5) * a, (Math.random() - 0.5) * a, (Math.random() - 0.5) * a)); this.shake *= Math.pow(0.02, dt); } this.cam.up.copy(this.up); this.cam.lookAt(look); this.cam.updateProjectionMatrix();
+    this.cam.position.copy(this.pos); if (this.shake > 0.001) { const a = this.shake * 0.35; this.cam.position.x += (Math.random() - 0.5) * a; this.cam.position.y += (Math.random() - 0.5) * a; this.cam.position.z += (Math.random() - 0.5) * a; this.shake *= Math.pow(0.02, dt); } this.cam.up.copy(this.up); this.cam.lookAt(look); this.cam.updateProjectionMatrix();
   }
 }

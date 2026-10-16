@@ -32,7 +32,8 @@ export class UI {
   close() { this.root.classList.remove('show'); this.open = false; setMenuOpen(false); this.onClose(); }
   private bind(id: string, f: () => void) { const e = this.root.querySelector<HTMLElement>('#' + id); if (!e) return; let lock = 0; const run = (ev: Event) => { if (Date.now() < lock) { ev.preventDefault(); return; } lock = Date.now() + 400; ev.preventDefault(); f(); }; e.addEventListener('pointerup', run); e.onclick = run; }
   main() {
-    this.show(`<h1>倒悬极速<small>INVERT</small></h1><button id="b1">开始游戏</button><button id="b2">选择关卡</button><button id="b4" class="daily">每日挑战 · ${shanghaiDate().slice(4, 6)}/${shanghaiDate().slice(6)}</button><button id="b5">排行榜</button><button id="b3">设置</button>`);
+    this.show(`<h1>倒悬极速<small>INVERT</small></h1><button id="b1">开始游戏</button><button id="b2">选择关卡</button><button id="b4" class="daily">每日挑战 · ${shanghaiDate().slice(4, 6)}/${shanghaiDate().slice(6)}</button><button id="b5">排行榜</button><button id="b6">操作说明</button><button id="b3">设置</button>`);
+    this.bind('b6', () => this.help());
     this.bind('b4', () => this.goDaily()); this.bind('b5', () => this.leaderboard());
     this.bind('b1', () => this.cur ? this.close() : this.go(1)); this.bind('b2', () => this.select()); this.bind('b3', () => this.settings());
   }
@@ -45,11 +46,20 @@ export class UI {
   }
   settings() {
     const qs = (Object.keys(QUALITIES) as QName[]).map(q => `<button class="${q === this.quality ? 'sel' : ''}" data-q="${q}">${q}</button>`).join('');
-    this.show(`<h2>设置 · 画质</h2><div class="row">${qs}</div><p class="sl">极高：实时阴影 + 环境光遮蔽 + 高清车模；画面卡顿时会自动降级。切换后重新加载。</p>
+    this.show(`<h2>设置 · 画质</h2><div class="row">${qs}</div><p class="sl">默认自动选择（电脑 高 / 手机 中+）。极高：实时阴影 + 环境光遮蔽 + 高清车模。卡顿时会自动降级。切换后重新加载。</p><button id="qa">恢复自动</button>
+      <h2>操作提示</h2><div class="row"><button id="hn1" class="${localStorage.getItem('invert.hints') !== '0' ? 'sel' : ''}">开</button><button id="hn0" class="${localStorage.getItem('invert.hints') === '0' ? 'sel' : ''}">关</button></div><p class="sl">关键时刻在屏幕中央显示按键提示（手机上对应按钮会发光）。重新加载后生效。</p>
       <h2>喷气缓降辅助</h2><div class="row"><button id="as1" class="${this.assist.get() ? 'sel' : ''}">开</button><button id="as0" class="${this.assist.get() ? '' : 'sel'}">关</button></div><p class="sl">开启后下落接近地面时自动反推（G 键切换）。</p><button id="bk">返回</button>`);
+    this.bind('qa', () => { localStorage.removeItem('invert.quality'); localStorage.removeItem('invert.qauto'); location.reload(); });
+    this.bind('hn1', () => { localStorage.setItem('invert.hints', '1'); this.settings(); }); this.bind('hn0', () => { localStorage.setItem('invert.hints', '0'); this.settings(); });
     this.bind('as1', () => { this.assist.set(true); this.settings(); }); this.bind('as0', () => { this.assist.set(false); this.settings(); });
     this.root.querySelectorAll<HTMLElement>('[data-q]').forEach(b => { const f = () => { saveQuality(b.dataset.q as QName); location.reload(); }; b.onclick = f; b.addEventListener('pointerup', e => { e.preventDefault(); f(); }); });
     this.bind('bk', () => this.main());
+  }
+  help() {
+    const rows: [string, string, string][] = [['加速 / 刹车', 'W / S', '摇杆 上 / 下'], ['转向', 'A / D', '摇杆 左 / 右'], ['吸地（贴紧弯道、倒挂）', 'Shift', '吸地 ⤓'], ['推进器 / 喷气缓降', '空格', '推进 ▲'], ['喷射加速', 'F', '喷射 »'], ['空中姿态：空翻 / 侧翻', '方向键 / Q E', '空中推摇杆'], ['切换镜头 / 稳定 / 重来', 'C / T / R', '镜头 / 稳定 / 重置'], ['喷气缓降辅助', 'G', '设置中开关'], ['菜单 / 暂停', 'Esc', '左上「菜单」']];
+    this.show(`<h2>操作说明</h2><table><tr><td><b>动作</b></td><td><b>键盘</b></td><td><b>手机</b></td></tr>${rows.map(r => `<tr><td>${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td></tr>`).join('')}</table>
+      <p class="sl">技巧：冲上弯道时按住吸地；下落进入雷达绿色区时按住推进喷气缓降，竖直速度 &lt; 2 m/s 落地得 S。</p><div class="row">${this.cur ? '<button id="hc">继续游戏</button>' : ''}<button id="bk">返回</button></div>`);
+    this.bind('bk', () => this.main()); this.bind('hc', () => this.close());
   }
   async lbTable(b: string, me?: Entry) {
     const l = await board.top(b, 10); if (!l.length) return '<p class="sl">还没有记录，来创造第一个吧！</p>';

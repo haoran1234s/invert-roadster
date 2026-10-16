@@ -8,7 +8,7 @@ for (const lv of want) {
   await p.goto(typeof lv === 'string' ? `${base}?daily=${lv.slice(1)}&play=1&q=${process.env.Q || '中'}&noadapt` : `${base}?level=${lv}&play=1&q=${process.env.Q || '极高'}&noadapt`); await p.waitForFunction(() => window.__game, null, { timeout: 60000 });
   const S = (sec, c) => p.evaluate(([s, c]) => { window.__game.sim(s, c); return window.__game.state(); }, [sec, c]);
   const strat = process.env['S' + lv] || 'best';
-  let s = await S(0.1, {}); let tpl = 0;
+  let s = await S(0.6, {}); let tpl = 0;
   if (typeof lv === 'string') { const d = await p.evaluate(() => ({ id: window.__game.levelId, desc: document.title })); const L = await p.evaluate(() => window.__game.ldesc); tpl = L; } let t = 0; let doneIdx = 0; const log = [];
   while (s.st !== 'result' && t < 120) {
     let c = {};

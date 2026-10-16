@@ -8,10 +8,15 @@ const css = `
 #tc .stick{position:absolute;left:max(18px,env(safe-area-inset-left));bottom:18px;width:150px;height:150px;border-radius:50%;background:rgba(232,244,255,.07);border:2px solid rgba(232,244,255,.35);pointer-events:auto;touch-action:none}
 #tc .knob{position:absolute;left:50%;top:50%;width:62px;height:62px;margin:-31px;border-radius:50%;background:rgba(232,244,255,.35);border:2px solid rgba(232,244,255,.7)}
 #tc .lbl{position:absolute;width:100%;text-align:center;top:-20px;color:#9ab;font:12px "Microsoft YaHei",sans-serif}
-#tc .btns{position:absolute;right:max(14px,env(safe-area-inset-right));bottom:14px;display:grid;grid-template-columns:repeat(3,64px);gap:10px;pointer-events:none}
-#tc .b{width:64px;height:64px;border-radius:50%;background:rgba(232,244,255,.1);border:2px solid rgba(232,244,255,.4);color:#e8f4ff;font:bold 13px "Microsoft YaHei",sans-serif;display:flex;align-items:center;justify-content:center;pointer-events:auto;touch-action:none;text-align:center;line-height:1.1}
+#tc .btns{position:absolute;right:max(14px,env(safe-area-inset-right));bottom:14px;display:grid;grid-template-columns:repeat(3,78px);gap:12px;pointer-events:none}
+#tc .b{width:78px;height:78px;flex-direction:column;border-radius:50%;background:rgba(232,244,255,.1);border:2px solid rgba(232,244,255,.4);color:#e8f4ff;font:bold 13px "Microsoft YaHei",sans-serif;display:flex;align-items:center;justify-content:center;pointer-events:auto;touch-action:none;text-align:center;line-height:1.1}
 #tc .b.big{background:rgba(255,60,60,.18);border-color:rgba(255,90,90,.7)}
 #tc .b.on{background:rgba(232,244,255,.45)}
+#tc .b i{font-style:normal;font-size:24px;line-height:1}#tc .top .b i{display:none}
+#tc .hint{animation:hg .7s ease-in-out infinite alternate;border-color:#ffc23a!important;box-shadow:0 0 18px 6px rgba(255,194,58,.7)}
+#tc .hint::after{content:'▼';position:absolute;transform:translateY(-62px);color:#ffc23a;font-size:26px;animation:ha .7s ease-in-out infinite alternate;text-shadow:0 0 8px #000}
+#tc .stick.hint::after{left:50%;top:-30px;transform:translateX(-50%)}
+@keyframes hg{from{transform:scale(1)}to{transform:scale(1.12)}}@keyframes ha{from{margin-top:0}to{margin-top:-10px}}
 #tc .top{position:absolute;right:max(14px,env(safe-area-inset-right));top:120px;display:flex;flex-direction:column;gap:8px}
 #tc .top .b{width:52px;height:40px;border-radius:10px;font-size:12px}
 body.menu-open #tc,body.menu-open canvas{pointer-events:none!important;visibility:hidden}
@@ -52,7 +57,7 @@ export function initTouch(force = false) {
   const root = document.createElement('div'); root.id = 'tc';
   root.innerHTML = `<div class="stick"><div class="lbl">油门/转向 · 空中=姿态</div><div class="knob"></div></div>
   <div class="top"><div class="b" data-t="KeyC">镜头</div><div class="b" data-t="KeyT">稳定</div><div class="b" data-t="KeyR">重置</div></div>
-  <div class="btns"><div class="b" data-h="fan">吸地</div><div class="b" data-h="boost">喷射</div><div class="b big" data-h="thrust">推进</div></div>`;
+  <div class="btns"><div class="b" data-h="fan"><i>⤓</i>吸地</div><div class="b" data-h="boost"><i>»</i>喷射</div><div class="b big" data-h="thrust"><i>▲</i>推进</div></div>`;
   document.body.appendChild(root);
   root.querySelectorAll<HTMLElement>('[data-h]').forEach(el => hold(el, el.dataset.h as any));
   root.querySelectorAll<HTMLElement>('[data-t]').forEach(el => tap(el, el.dataset.t!));
@@ -85,4 +90,10 @@ export function initTouch(force = false) {
     if (el === document.body || el === document.documentElement || el.tagName === 'CANVAS' || el.closest?.('#tc,#hud')) e.preventDefault();
   }, { passive: false });
   return true;
+}
+
+/** highlight the on-screen control the current prompt refers to */
+export function setHintButton(k: string) {
+  document.querySelectorAll('#tc .hint').forEach(e => e.classList.remove('hint'));
+  if (!k) return; const el = document.querySelector(k === 'stick' ? '#tc .stick' : `#tc [data-h="${k}"]`); el?.classList.add('hint');
 }
