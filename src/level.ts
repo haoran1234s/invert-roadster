@@ -69,11 +69,13 @@ export function buildLevel(L: LevelData, scene: THREE.Scene, world: RAPIER.World
   for (let i = 8; i <= A.segments; i += 8) { const p = pts[i]; if (p.y < 3) continue; for (const s of [-1, 1]) { legs.push(new THREE.BoxGeometry(0.6, p.y, 0.6).translate(s * (W + 1.5), p.y / 2, p.z - 3)); } }
   const tb = new THREE.CylinderGeometry(3, 4, 30, 12).translate(-60, 15, 80);
   const hg = new THREE.CylinderGeometry(22, 22, 50, 24, 1, false, 0, Math.PI); hg.rotateZ(Math.PI / 2); hg.rotateY(Math.PI / 2); hg.translate(70, 0, 160);
-  scene.add(new THREE.Mesh(mergeGeometries([...legs, tb, hg].map(g => g.toNonIndexed())), truss)); // merged static props
+  scene.add(new THREE.Mesh(mergeGeometries(legs.map(g => g.toNonIndexed())), truss)); // merged ramp legs
+  const greyProps = new THREE.Mesh(mergeGeometries([tb, hg].map(g => g.toNonIndexed())), truss); scene.add(greyProps);
   // tower + hangar props (swappable later)
   const tower = new THREE.Group();
   const cab = new THREE.Mesh(new THREE.CylinderGeometry(6, 5, 5, 16), new THREE.MeshStandardMaterial({ color: 0x223344, emissive: 0x335577, emissiveIntensity: 0.8 })); cab.position.y = 32; tower.add(cab);
   tower.position.set(-60, 0, 80); scene.add(tower);
+  const handles = { runway: rw, dashes, lights, props: [greyProps, tower] as THREE.Object3D[] };
   // --- orientation aids (all unlit, merged/instanced) ---
   const edgeG: THREE.BufferGeometry[] = [];
   for (const sx of [-1, 1]) edgeG.push(new THREE.PlaneGeometry(0.5, R.length).rotateX(-Math.PI / 2).translate(sx * (R.width / 2 - 0.6), 0.025, R.zStart - R.length / 2));
@@ -102,4 +104,5 @@ export function buildLevel(L: LevelData, scene: THREE.Scene, world: RAPIER.World
   // stars
   const sg = new THREE.BufferGeometry(); const sp: number[] = []; for (let i = 0; i < 800; i++) { const v = new THREE.Vector3().randomDirection(); v.y = Math.abs(v.y) * 0.8 + 0.2; v.multiplyScalar(900); sp.push(v.x, v.y, v.z); }
   sg.setAttribute('position', new THREE.Float32BufferAttribute(sp, 3)); scene.add(new THREE.Points(sg, new THREE.PointsMaterial({ color: 0xffffff, size: 1.5, fog: false, transparent: true, opacity: 0.7 })));
+  return handles;
 }

@@ -8,6 +8,7 @@ import vehicleData from './data/vehicle.json';
 import thrusterData from './data/thrusters.json';
 import level1 from './data/level1.json';
 import { buildLevel, type LevelData } from './level';
+import { loadScenery, loadGLB } from './env';
 import { Vehicle } from './vehicle';
 import { Vapor } from './particles';
 import { Scoring } from './scoring';
@@ -48,9 +49,12 @@ function adapt(dtMs: number) {
 initTouch(Q.has('touch'));
 const world = new RAPIER.World({ x: 0, y: -9.81, z: 0 }); world.timestep = 1 / 60;
 let envTex: THREE.Texture | null = null;
-buildLevel(L, scene, world);
+const handles = buildLevel(L, scene, world);
 { const pm = new THREE.PMREMGenerator(renderer); envTex = pm.fromScene(new RoomEnvironment(), 0.04).texture; pm.dispose(); }
 const car = new Vehicle(vehicleData, thrusterData, world, scene, envTex);
+let sceneryLoaded = -1;
+if (!Q.has('greybox')) loadScenery(MOBILE ? 'models/mobile/' : 'models/desktop/', scene, handles, L.runway, envTex).then(n => sceneryLoaded = n); else sceneryLoaded = 0;
+if (!Q.has('greybox')) loadGLB((MOBILE ? 'models/mobile/' : 'models/desktop/') + 'wheel.glb').then(w => car.setWheelModel(w)).catch(e => console.warn('wheel model failed', e));
 const vapor = new Vapor(scene); const score = new Scoring(); const hud = new Hud(document.getElementById('hud') as HTMLCanvasElement); const rig = new CamRig(camera);
 let checkpoint = 0;
 let phase = 0, phaseFrac = 0, airT = 0, banner = 0;
@@ -85,13 +89,13 @@ function fixedStep(c: Controls) {
   starOk().forEach((s, i) => { if (s.ok && !earned[i]) { earned[i] = true; score.msg(`★ ${s.label}`); } });
 }
 let forced: Controls | null = null; let acc = 0; let last = performance.now(); let fps = 60; let fc = 0, ft = 0;
-const ftimes: number[] = [];
+const ftimes: number[] = []; let lookLock = false;
 function frame() {
   const now = performance.now(); const dt = Math.min(0.1, (now - last) / 1000); ftimes.push(now - last); adapt(now - last); if (ftimes.length > 600) ftimes.shift(); last = now; fc++; ft += dt; if (ft > 0.5) { fps = Math.round(fc / ft); fc = 0; ft = 0; }
   const c = forced ?? mergeTouch(readControls());
   while (pressedOnce.length) { const k = pressedOnce.shift(); if (k === 'KeyR') reset(); if (k === 'KeyC') rig.next(); if (k === 'KeyT') car.V.air.stabilize = car.V.air.stabilize ? 0 : 3; }
   if (!forced) { acc += dt; let n = 0; while (acc >= 1 / 60 && n < 5) { fixedStep(c); acc -= 1 / 60; n++; } if (n === 5) acc = 0; }
-  rig.update(dt, car); (scene.userData.sky as THREE.Object3D)?.position.copy(camera.position); render();
+  if (!lookLock) rig.update(dt, car); (scene.userData.sky as THREE.Object3D)?.position.copy(camera.position); render();
   requestAnimationFrame(frame);
 }
 renderer.info.autoReset = false;
@@ -116,7 +120,8 @@ function mergeTouch(c: Controls): Controls {
 (window as any).__game = {
   sim(sec: number, c: Partial<Controls>) { forced = { ...emptyControls(), ...c }; for (let i = 0; i < Math.round(sec * 60); i++) fixedStep(forced); rig.update(1 / 60, car, true); },
   perf() { const a = ftimes.slice(-120); return { avgMs: +(a.reduce((x, y) => x + y, 0) / a.length).toFixed(1), calls: renderer.info.render.calls, scale: +(BASE_DPR * scale).toFixed(2), bloom: bloomOn, touch: { ...touch }, tris: renderer.info.render.triangles, w: renderer.domElement.width, h: renderer.domElement.height }; },
+  look(p: number[], t: number[]) { lookLock = true; forced = emptyControls(); rig.mode = 0; camera.position.fromArray(p); camera.up.set(0, 1, 0); camera.lookAt(t[0], t[1], t[2]); (scene.userData.sky as THREE.Object3D)?.position.copy(camera.position); render(); },
   release() { forced = null; }, setCam(i: number) { rig.mode = i; rig.update(1 / 60, car, true); }, reset,
-  modelLoaded: () => car.modelLoaded,
+  modelLoaded: () => car.modelLoaded && sceneryLoaded >= 0 && (car.wheelModel || Q.has('greybox')),
   state: () => ({ phase: SECTIONS[phase], pos: car.pos.toArray().map(x => +x.toFixed(2)), up: car.up.toArray().map(x => +x.toFixed(2)), normal: car.normal.toArray().map(x => +x.toFixed(2)), speed: +car.vel.length().toFixed(1), vy: +car.vel.y.toFixed(1), grounded: car.grounded, contacts: car.contacts, gas: +car.gas.toFixed(2), df: Math.round(car.downforceN / 9.81), score: Math.round(score.score), inv: +score.bestInverted.toFixed(2), stars: [...earned], crashed: score.crashed, msgs: score.msgs.map(m => m.t) }),
 };

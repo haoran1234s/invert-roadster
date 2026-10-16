@@ -8,7 +8,7 @@ const G = 9.81;
 const v3 = (a: { x: number; y: number; z: number }) => new THREE.Vector3(a.x, a.y, a.z);
 
 export class Vehicle {
-  body: RAPIER.RigidBody; collider: RAPIER.Collider; mesh = new THREE.Group(); wheels: THREE.Object3D[] = []; wheelXZ: number[][] = []; modelLoaded = false;
+  body: RAPIER.RigidBody; collider: RAPIER.Collider; mesh = new THREE.Group(); wheels: THREE.Object3D[] = []; wheelXZ: number[][] = []; modelLoaded = false; wheelModel = false; private pendingWheel: THREE.Object3D | null = null;
   mass: number; gas = 1; time = 0; lastGround = -99; contacts = 0; normal = new THREE.Vector3(0, 1, 0);
   up = new THREE.Vector3(); fwd = new THREE.Vector3(); right = new THREE.Vector3(); quat = new THREE.Quaternion(); pos = new THREE.Vector3(); vel = new THREE.Vector3();
   downforceN = 0; gForce = 1; thrusting = false; boosting = false; private prevVel = new THREE.Vector3(); private prevNormal = new THREE.Vector3(0, 1, 0); private steerVis = 0; private wheelSpin = 0;
@@ -47,9 +47,21 @@ export class Vehicle {
           });
         } else this.wheels.forEach(w => w.visible = false); // wheels baked into body
         root.traverse(o => { if ((o as THREE.Mesh).isMesh) { (o as THREE.Mesh).frustumCulled = false; const m = (o as THREE.Mesh).material as THREE.MeshStandardMaterial; if (envMap && m.isMeshStandardMaterial) { m.envMap = envMap; m.envMapIntensity = 1.3; m.roughness = Math.min(m.roughness, 0.55); } } });
-        placeholder.visible = false; this.mesh.add(root); this.modelLoaded = true; dr.dispose();
+        placeholder.visible = false; this.mesh.add(root); this.modelLoaded = true; dr.dispose(); if (this.pendingWheel) this.setWheelModel(this.pendingWheel);
       }, undefined, e => console.warn('car model failed, using greybox', e));
     }
+  }
+  // swap in a dedicated wheel model (axis along glTF Z, radius ~0.59) on each spin node; left wheels mirrored
+  setWheelModel(w: THREE.Object3D) {
+    if (!this.modelLoaded) { this.pendingWheel = w; return; }
+    const k = this.V.wheels.radius * 0.97 / 0.59;
+    this.wheels.forEach((pivot, i) => {
+      const spin = pivot.children[0]; if (!spin) return;
+      spin.children.forEach(c => c.visible = false);
+      const c = w.clone(); c.rotation.y = Math.PI / 2; c.scale.set(k, k, k * 1.0); if (i % 2 === 0) c.scale.z *= -1; // mirror: rim faces outward
+      spin.add(c);
+    });
+    this.wheelModel = true;
   }
   reset(p: number[], yawDeg: number) {
     this.body.setTranslation({ x: p[0], y: p[1], z: p[2] }, true);
