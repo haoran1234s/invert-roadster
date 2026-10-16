@@ -1,3 +1,5 @@
+import { board, lastName, saveName, type Entry } from './leaderboard';
+import { shanghaiDate } from './daily';
 import { loadProgress, unlocked, saveQuality, type QName, QUALITIES } from './quality';
 // DOM menus (all Chinese): main menu, level select, settings, result panel
 const css = `
@@ -14,11 +16,12 @@ const css = `
 .ui .grade{font-size:clamp(60px,12vw,110px);font-weight:900;line-height:1;text-shadow:0 0 30px currentColor}
 .ui table{border-collapse:collapse;font-size:clamp(13px,2.2vw,16px)}.ui td{padding:2px 10px}.ui td:last-child{text-align:right;color:#ffc23a}
 .ui .stars{font-size:clamp(30px,6vw,44px);color:#ffc23a;letter-spacing:8px}.ui .sl{font-size:13px;color:#ccd;text-align:left}
-#menuBtn{position:fixed;left:14px;top:150px;z-index:6;font:13px "Microsoft YaHei",sans-serif;color:#e8f4ff;background:rgba(10,14,24,.5);border:1px solid rgba(232,244,255,.4);border-radius:8px;padding:3px 12px;cursor:pointer}`;
+#menuBtn{position:fixed;left:14px;top:150px;z-index:6;font:13px "Microsoft YaHei",sans-serif;color:#e8f4ff;background:rgba(10,14,24,.5);border:1px solid rgba(232,244,255,.4);border-radius:8px;padding:3px 12px;cursor:pointer}.ui .lb td{padding:2px 12px}.ui .lb tr.me td{color:#3dffa0;font-weight:bold}.ui input{font:inherit;font-size:17px;padding:8px 12px;border-radius:10px;border:2px solid #ffc23a;background:rgba(0,0,0,.4);color:#fff;width:180px;text-align:center}
+.ui .tabs{display:flex;gap:6px;flex-wrap:wrap;justify-content:center}.ui .tabs button{min-width:0;padding:6px 12px;font-size:14px}.ui .combo{color:#ff7bd5}.ui .daily{border-color:#ff7bd5}`;
 export interface LevelInfo { id: number; name: string; desc: string; stars: string[] }
 export class UI {
   root = document.createElement('div'); open = false;
-  constructor(private levels: LevelInfo[], private cur: number, private quality: QName, private go: (lvl: number) => void, private onClose: () => void) {
+  constructor(private levels: LevelInfo[], private cur: number, private quality: QName, private go: (lvl: number) => void, private onClose: () => void, private goDaily: () => void = () => {}, private assist = { get: () => false, set: (_: boolean) => {} }) {
     const st = document.createElement('style'); st.textContent = css; document.head.appendChild(st);
     this.root.className = 'ui'; document.body.appendChild(this.root);
     const mb = document.createElement('button'); mb.id = 'menuBtn'; mb.textContent = '菜单'; mb.onclick = () => this.main(); document.body.appendChild(mb);
@@ -28,7 +31,8 @@ export class UI {
   close() { this.root.classList.remove('show'); this.open = false; this.onClose(); }
   private bind(id: string, f: () => void) { const e = this.root.querySelector<HTMLElement>('#' + id); if (e) e.onclick = f; }
   main() {
-    this.show(`<h1>倒悬极速<small>INVERT</small></h1><button id="b1">开始游戏</button><button id="b2">选择关卡</button><button id="b3">设置</button>`);
+    this.show(`<h1>倒悬极速<small>INVERT</small></h1><button id="b1">开始游戏</button><button id="b2">选择关卡</button><button id="b4" class="daily">每日挑战 · ${shanghaiDate().slice(4, 6)}/${shanghaiDate().slice(6)}</button><button id="b5">排行榜</button><button id="b3">设置</button>`);
+    this.bind('b4', () => this.goDaily()); this.bind('b5', () => this.leaderboard());
     this.bind('b1', () => this.cur ? this.close() : this.go(1)); this.bind('b2', () => this.select()); this.bind('b3', () => this.settings());
   }
   select() {
@@ -40,16 +44,42 @@ export class UI {
   }
   settings() {
     const qs = (Object.keys(QUALITIES) as QName[]).map(q => `<button class="${q === this.quality ? 'sel' : ''}" data-q="${q}">${q}</button>`).join('');
-    this.show(`<h2>设置 · 画质</h2><div class="row">${qs}</div><p class="sl">极高：实时阴影 + 环境光遮蔽 + 高清车模；画面卡顿时会自动降级。切换后重新加载。</p><button id="bk">返回</button>`);
+    this.show(`<h2>设置 · 画质</h2><div class="row">${qs}</div><p class="sl">极高：实时阴影 + 环境光遮蔽 + 高清车模；画面卡顿时会自动降级。切换后重新加载。</p>
+      <h2>喷气缓降辅助</h2><div class="row"><button id="as1" class="${this.assist.get() ? 'sel' : ''}">开</button><button id="as0" class="${this.assist.get() ? '' : 'sel'}">关</button></div><p class="sl">开启后下落接近地面时自动反推（G 键切换）。</p><button id="bk">返回</button>`);
+    this.bind('as1', () => { this.assist.set(true); this.settings(); }); this.bind('as0', () => { this.assist.set(false); this.settings(); });
     this.root.querySelectorAll<HTMLElement>('[data-q]').forEach(b => b.onclick = () => { saveQuality(b.dataset.q as QName); location.reload(); });
     this.bind('bk', () => this.main());
   }
-  result(r: { grade: string; ok: boolean; title: string; rows: [string, string][]; total: number; stars: boolean[]; labels: string[]; next: boolean }, act: { retry: () => void; next: () => void; replay: () => void }) {
+  async lbTable(b: string, me?: Entry) {
+    const l = await board.top(b, 10); if (!l.length) return '<p class="sl">还没有记录，来创造第一个吧！</p>';
+    return `<table class="lb"><tr><td>#</td><td>名字</td><td>得分</td></tr>${l.map((e, i) => `<tr class="${me && e.date === me.date && e.name === me.name ? 'me' : ''}"><td>${i + 1}</td><td>${esc(e.name)}${e.grade ? ' · ' + e.grade : ''}</td><td>${e.score}</td></tr>`).join('')}</table>`;
+  }
+  async leaderboard(sel?: string) {
+    const daily = 'daily-' + shanghaiDate(); const tabs = [[daily, '今日挑战'], ...this.levels.map(l => ['L' + l.id, `${l.id}. ${l.name}`])];
+    const cur = sel ?? (this.cur ? 'L' + this.cur : daily);
+    this.show(`<h2>排行榜 · 本机</h2><div class="tabs">${tabs.map(([k, n]) => `<button data-b="${k}" class="${k === cur ? 'sel' : ''}">${n}</button>`).join('')}</div>${await this.lbTable(cur)}<button id="bk">返回</button>`);
+    this.root.querySelectorAll<HTMLElement>('[data-b]').forEach(b => b.onclick = () => this.leaderboard(b.dataset.b)); this.bind('bk', () => this.main());
+  }
+  result(r: { grade: string; ok: boolean; title: string; rows: [string, string][]; total: number; stars: boolean[]; labels: string[]; next: boolean; combos?: [string, string][]; board?: string; runT?: number }, act: { retry: () => void; next: () => void; replay: () => void }) {
     const gc = { S: '#ffd23f', A: '#3dffa0', B: '#6fc9d8', C: '#aab' } as any;
     this.show(`<h2>${r.title}</h2>${r.grade ? `<div class="grade" style="color:${gc[r.grade] ?? '#fff'}">${r.grade}</div>` : ''}
       <table>${r.rows.map(([a, b]) => `<tr><td>${a}</td><td>${b}</td></tr>`).join('')}<tr><td><b>总分</b></td><td><b>${r.total}</b></td></tr></table>
       <div class="stars">${r.stars.map(s => s ? '★' : '☆').join('')}</div><div class="sl">${r.labels.map((l, i) => `${r.stars[i] ? '★' : '☆'} ${l}`).join('<br>')}</div>
+      ${r.combos?.length ? `<table class="combo">${r.combos.map(([a, b]) => `<tr><td>${a}</td><td>${b}</td></tr>`).join('')}</table>` : ''}
+      <div id="lbx"></div>
       <div class="row"><button id="rt">再来一次</button><button id="nx" ${r.next ? '' : 'disabled'}>下一关</button><button id="rp">回放</button><button id="ls">关卡</button></div>`);
     this.bind('rt', () => { this.close(); act.retry(); }); this.bind('nx', act.next); this.bind('rp', () => { this.root.classList.remove('show'); this.open = false; act.replay(); }); this.bind('ls', () => this.select());
+    if (r.board) this.resultBoard(r);
+  }
+  private async resultBoard(r: { board?: string; total: number; runT?: number; grade: string }) {
+    const box = this.root.querySelector<HTMLElement>('#lbx'); if (!box || !r.board) return; const b = r.board;
+    const showTop = async (me?: Entry) => { box.innerHTML = `<b>排行榜 Top 10</b>${await this.lbTable(b, me)}`; };
+    if (await board.qualifies(b, r.total)) {
+      box.innerHTML = `<div class="row"><b style="color:#3dffa0">新纪录！进入前十</b><input id="nm" maxlength="12" placeholder="输入名字" value="${esc(lastName())}"><button id="sv">保存</button></div>`;
+      const sv = async () => { const name = (box.querySelector<HTMLInputElement>('#nm')!.value.trim() || '玩家').slice(0, 12); saveName(name); const e: Entry = { name, score: r.total, time: r.runT, grade: r.grade, date: Date.now() }; await board.submit(b, e); showTop(e); };
+      box.querySelector<HTMLElement>('#sv')!.onclick = sv; box.querySelector<HTMLInputElement>('#nm')!.onkeydown = e => { e.stopPropagation(); if (e.key === 'Enter') sv(); };
+    } else showTop();
   }
 }
+
+const esc = (t: string) => t.replace(/[&<>"']/g, c => `&#${c.charCodeAt(0)};`);

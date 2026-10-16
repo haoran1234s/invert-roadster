@@ -68,7 +68,7 @@ export class Vehicle {
     });
     this.wheelModel = true;
   }
-  extBoost = 0;
+  extBoost = 0; retro = false; G = G;
   reset(p: number[], yawDeg: number) {
     this.extBoost = 0;
     this.body.setTranslation({ x: p[0], y: p[1], z: p[2] }, true);
@@ -108,7 +108,7 @@ export class Vehicle {
     this.downforceN = this.attached ? V.downforce.k * speed * speed + fanN : 0;
     if (this.attached) b.applyImpulse(this.normal.clone().multiplyScalar(-this.downforceN * dt), true);
     const n = this.normal;
-    this.thrusting = false; this.boosting = false;
+    this.thrusting = false; this.boosting = false; this.retro = false;
     if (contacts >= 2) {
       const f = this.fwd.clone().addScaledVector(n, -this.fwd.dot(n)).normalize();
       const s = new THREE.Vector3().crossVectors(f, n).normalize();
@@ -149,7 +149,13 @@ export class Vehicle {
       b.setAngvel(w, true);
     }
     // thrusters
-    if (c.thrust && this.gas > 0) { this.thrusting = true; this.gas -= dt / T.tankSec; b.applyImpulse(this.up.clone().multiplyScalar(T.liftG * G * m * dt), true); }
+    this.retro = false;
+    if (c.thrust && this.gas > 0) {
+      this.thrusting = true;
+      if (!contacts && this.vel.y < -1 && this.up.y > 0.7) { // 喷气缓降: strong vertical retro-thrust while falling nose-level
+        this.retro = true; this.gas -= dt / T.tankSec * 1.4; b.applyImpulse(new THREE.Vector3(0, (T.retroG ?? 2.6) * this.G * m * dt, 0), true);
+      } else { this.gas -= dt / T.tankSec; b.applyImpulse(this.up.clone().multiplyScalar(T.liftG * this.G * m * dt), true); }
+    }
     if (this.extBoost > 0) { this.extBoost -= dt; this.boosting = true; b.applyImpulse(this.fwd.clone().multiplyScalar(T.boostG * 1.6 * G * m * dt), true); }
     if (c.boost && this.gas > 0) { this.boosting = true; this.gas -= dt / T.tankSec * 0.7; b.applyImpulse(this.fwd.clone().multiplyScalar(T.boostG * G * m * dt), true); }
     if (!this.thrusting && !this.boosting) this.gas = Math.min(1, this.gas + dt * (contacts ? T.regenGround : T.regenAir) / 1);
