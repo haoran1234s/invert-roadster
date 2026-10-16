@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import RAPIER from '@dimforge/rapier3d-compat';
 export interface LevelData { id: string; name: string; desc: string; start: { pos: number[]; yawDeg: number }; runway: { length: number; width: number; zStart: number; lightSpacing: number }; ramp: { z0: number; radius: number; width: number; endDeg: number; segments: number }; checkpoints: { pos: number[]; yawDeg: number; z: number }[]; stars: { type: string; value: number; label: string }[]; }
 
@@ -52,15 +53,19 @@ export function buildLevel(L: LevelData, scene: THREE.Scene, world: RAPIER.World
   world.createCollider(RAPIER.ColliderDesc.trimesh(new Float32Array(ip), new Uint32Array(ii)).setFriction(0.8).setCollisionGroups(0x00020002));
   // neon edges
   const neon = new THREE.MeshBasicMaterial({ color: 0xff1a2a });
-  for (const s of [-1, 1]) { const c = new THREE.CatmullRomCurve3(pts.map(p => new THREE.Vector3(s * (W + 0.1), p.y, p.z))); scene.add(new THREE.Mesh(new THREE.TubeGeometry(c, 200, 0.18, 6), neon)); }
+  const neonG: THREE.BufferGeometry[] = []; for (const s of [-1, 1]) { const c = new THREE.CatmullRomCurve3(pts.map(p => new THREE.Vector3(s * (W + 0.1), p.y, p.z))); neonG.push(new THREE.TubeGeometry(c, 120, 0.18, 6)); }
+  scene.add(new THREE.Mesh(mergeGeometries(neonG), neon)); // merged: 1 draw call
   // truss legs
   const truss = new THREE.MeshStandardMaterial({ color: 0x333840, metalness: 0.6, roughness: 0.5 });
-  for (let i = 8; i <= A.segments; i += 8) { const p = pts[i]; if (p.y < 3) continue; for (const s of [-1, 1]) { const leg = new THREE.Mesh(new THREE.BoxGeometry(0.6, p.y, 0.6), truss); leg.position.set(s * (W + 1.5), p.y / 2, p.z - 3); scene.add(leg); } }
+  const legs: THREE.BufferGeometry[] = [];
+  for (let i = 8; i <= A.segments; i += 8) { const p = pts[i]; if (p.y < 3) continue; for (const s of [-1, 1]) { legs.push(new THREE.BoxGeometry(0.6, p.y, 0.6).translate(s * (W + 1.5), p.y / 2, p.z - 3)); } }
+  const tb = new THREE.CylinderGeometry(3, 4, 30, 12).translate(-60, 15, 80);
+  const hg = new THREE.CylinderGeometry(22, 22, 50, 24, 1, false, 0, Math.PI); hg.rotateZ(Math.PI / 2); hg.rotateY(Math.PI / 2); hg.translate(70, 0, 160);
+  scene.add(new THREE.Mesh(mergeGeometries([...legs, tb, hg].map(g => g.toNonIndexed())), truss)); // merged static props
   // tower + hangar props (swappable later)
-  const tower = new THREE.Group(); const tb = new THREE.Mesh(new THREE.CylinderGeometry(3, 4, 30, 12), truss); tb.position.y = 15; tower.add(tb);
+  const tower = new THREE.Group();
   const cab = new THREE.Mesh(new THREE.CylinderGeometry(6, 5, 5, 16), new THREE.MeshStandardMaterial({ color: 0x223344, emissive: 0x335577, emissiveIntensity: 0.8 })); cab.position.y = 32; tower.add(cab);
   tower.position.set(-60, 0, 80); scene.add(tower);
-  const hangar = new THREE.Mesh(new THREE.CylinderGeometry(22, 22, 50, 24, 1, false, 0, Math.PI), truss); hangar.rotation.z = Math.PI / 2; hangar.rotation.y = Math.PI / 2; hangar.position.set(70, 0, 160); scene.add(hangar);
   // stars
   const sg = new THREE.BufferGeometry(); const sp: number[] = []; for (let i = 0; i < 1500; i++) { const v = new THREE.Vector3().randomDirection(); v.y = Math.abs(v.y) + 0.05; v.multiplyScalar(900); sp.push(v.x, v.y, v.z); }
   sg.setAttribute('position', new THREE.Float32BufferAttribute(sp, 3)); scene.add(new THREE.Points(sg, new THREE.PointsMaterial({ color: 0xffffff, size: 1.5, fog: false })));

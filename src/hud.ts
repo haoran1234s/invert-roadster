@@ -13,12 +13,12 @@ export class Hud {
     c.textAlign = 'center'; c.font = `bold ${r * 0.34}px Consolas, monospace`; c.fillText(text, x, y + r * 0.1);
     c.font = `${r * 0.16}px Consolas, monospace`; c.globalAlpha = 0.8; c.fillText(unit, x, y + r * 0.38); c.fillText(label, x, y + r + r * 0.28); c.globalAlpha = 1;
   }
-  draw(v: Vehicle, s: Scoring, info: { cam: string; level: string; stars: { label: string; ok: boolean }[]; hint: string; fps: number }) {
-    const cv = this.cv, c = this.ctx, dpr = devicePixelRatio || 1; const W = innerWidth, H = innerHeight;
+  draw(v: Vehicle, s: Scoring, info: { cam: string; level: string; stars: { label: string; ok: boolean }[]; hint: string; fps: number; debug?: string; compact?: boolean }) {
+    const cv = this.cv, c = this.ctx, dpr = Math.min(devicePixelRatio || 1, info.compact ? 1.5 : 2); const W = innerWidth, H = innerHeight;
     if (cv.width !== W * dpr) { cv.width = W * dpr; cv.height = H * dpr; cv.style.width = W + 'px'; cv.style.height = H + 'px'; }
     c.setTransform(dpr, 0, 0, dpr, 0, 0); c.clearRect(0, 0, W, H);
-    const r = Math.min(70, W / 16); const y = H - r - 40; const pitch = Math.asin(Math.max(-1, Math.min(1, v.fwd.y))) * 180 / Math.PI;
-    const g0 = W / 2 - r * 3.4;
+    const r = info.compact ? Math.min(44, W / 20) : Math.min(70, W / 16); const y = info.compact ? H - r - 34 : H - r - 40; const pitch = Math.asin(Math.max(-1, Math.min(1, v.fwd.y))) * 180 / Math.PI;
+    const g0 = info.compact ? W * 0.465 - r * 3.45 : W / 2 - r * 3.4;
     this.gauge(g0, y, r, 'DOWNFORCE', 'KG', v.downforceN / 9.81, 5000, Math.round(v.downforceN / 9.81).toString());
     this.gauge(g0 + r * 2.3, y, r, 'G-FORCE', 'G', v.gForce, 5, v.gForce.toFixed(1));
     this.gauge(g0 + r * 4.6, y, r, 'PITCH', 'DEG', Math.abs(pitch), 90, Math.round(pitch).toString());
@@ -28,7 +28,7 @@ export class Hud {
     c.strokeStyle = CY; c.lineWidth = 1.2; c.beginPath(); c.moveTo(-26, 4); c.lineTo(-24, -3); c.lineTo(-8, -6); c.lineTo(4, -12); c.lineTo(16, -10); c.lineTo(26, -2); c.lineTo(26, 4); c.closePath(); c.stroke();
     for (const wx of [-15, 15]) { c.beginPath(); c.arc(wx, 5, 4, 0, Math.PI * 2); c.stroke(); } c.restore();
     // gas bar
-    const bx = W / 2 - 150, by = H - 22; c.strokeStyle = CY; c.strokeRect(bx, by, 300, 8); c.fillStyle = v.gas > 0.25 ? '#dff' : '#f55'; c.fillRect(bx + 1, by + 1, 298 * v.gas, 6);
+    const bw = info.compact ? 200 : 300; const bx = W / 2 - bw / 2, by = H - 22; c.strokeStyle = CY; c.strokeRect(bx, by, bw, 8); c.fillStyle = v.gas > 0.25 ? '#dff' : '#f55'; c.fillRect(bx + 1, by + 1, (bw - 2) * v.gas, 6);
     c.font = '11px Consolas'; c.fillStyle = CY; c.textAlign = 'right'; c.fillText('COLD GAS', bx - 8, by + 8);
     // top-left: live tag + level
     c.textAlign = 'left'; c.fillStyle = '#e33'; c.beginPath(); c.arc(24, 28, 5, 0, 7); c.fill(); c.fillStyle = CY; c.font = 'bold 15px Consolas'; c.fillText('INVERT LIVE', 36, 33);
@@ -37,10 +37,11 @@ export class Hud {
     // top-right: score + combo + speed
     c.textAlign = 'right'; c.fillStyle = CY; c.font = 'bold 28px Consolas'; c.fillText(Math.round(s.score).toString().padStart(6, '0'), W - 20, 40);
     c.font = '15px Consolas'; c.fillText(`RUN ${Math.round(s.run)}   COMBO x${s.combo}`, W - 20, 62);
-    c.fillText(`${Math.round(v.vel.length() * 3.6)} KM/H`, W - 20, 84); c.fillText(`CAM: ${info.cam}   ${info.fps} FPS`, W - 20, 104);
+    c.fillText(`${Math.round(v.vel.length() * 3.6)} KM/H`, W - 20, 84); c.fillText(`CAM: ${info.cam}`, W - 20, 104);
+    if (info.debug) { c.textAlign = 'left'; c.font = '12px Consolas'; c.fillStyle = '#7f7'; c.fillText(info.debug, info.compact ? W * 0.3 : 20, info.compact ? 20 : H - 8); c.textAlign = 'right'; c.fillStyle = CY; }
     // messages
     c.textAlign = 'center'; c.font = 'bold 22px "Microsoft YaHei", sans-serif';
     s.msgs.forEach((m, i) => { c.globalAlpha = Math.min(1, m.ttl); c.fillStyle = '#fff'; c.fillText(m.t, W / 2, H * 0.28 + i * 30); }); c.globalAlpha = 1;
-    c.font = '12px "Microsoft YaHei", sans-serif'; c.fillStyle = '#8899aa'; c.fillText(info.hint, W / 2, 20);
+    if (info.hint) { c.font = '12px "Microsoft YaHei", sans-serif'; c.fillStyle = '#8899aa'; c.fillText(info.hint, W / 2, 20); }
   }
 }
