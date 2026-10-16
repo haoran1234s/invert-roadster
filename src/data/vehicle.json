@@ -1,6 +1,6 @@
 {
- "name": "Volt Roadster (placeholder)",
- "model": "",
+ "name": "Roadster (Hunyuan)",
+ "model": "models/roadster_desktop.glb",
  "wheelModel": "",
  "body": {
   "halfExtents": [
@@ -57,5 +57,6 @@
   "rotAccel": 5.0,
   "stabilize": 3.0,
   "angularDamping": 0.25
- }
+ },
+ "modelMobile": "models/roadster_mobile.glb"
 }

@@ -1,16 +1,18 @@
 import * as THREE from 'three';
 import RAPIER from '@dimforge/rapier3d-compat';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
+import { isTouch } from './touch';
 import type { Controls } from './input';
 const G = 9.81;
 const v3 = (a: { x: number; y: number; z: number }) => new THREE.Vector3(a.x, a.y, a.z);
 
 export class Vehicle {
-  body: RAPIER.RigidBody; collider: RAPIER.Collider; mesh = new THREE.Group(); wheels: THREE.Object3D[] = [];
+  body: RAPIER.RigidBody; collider: RAPIER.Collider; mesh = new THREE.Group(); wheels: THREE.Object3D[] = []; wheelXZ: number[][] = []; modelLoaded = false;
   mass: number; gas = 1; time = 0; lastGround = -99; contacts = 0; normal = new THREE.Vector3(0, 1, 0);
   up = new THREE.Vector3(); fwd = new THREE.Vector3(); right = new THREE.Vector3(); quat = new THREE.Quaternion(); pos = new THREE.Vector3(); vel = new THREE.Vector3();
   downforceN = 0; gForce = 1; thrusting = false; boosting = false; private prevVel = new THREE.Vector3(); private prevNormal = new THREE.Vector3(0, 1, 0); private steerVis = 0; private wheelSpin = 0;
-  constructor(public V: any, public T: any, private world: RAPIER.World, scene: THREE.Scene) {
+  constructor(public V: any, public T: any, private world: RAPIER.World, scene: THREE.Scene, envMap: THREE.Texture | null = null) {
     const h = V.body.halfExtents;
     this.body = world.createRigidBody(RAPIER.RigidBodyDesc.dynamic().setCcdEnabled(true).setAngularDamping(V.air.angularDamping).setLinearDamping(0.02));
     this.collider = world.createCollider(RAPIER.ColliderDesc.cuboid(h[0], h[1], h[2]).setDensity(V.body.density).setFriction(0.3).setRestitution(0.05).setCollisionGroups(0x00010001), this.body);
@@ -27,7 +29,27 @@ export class Vehicle {
     const wm = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.7 });
     for (let i = 0; i < 4; i++) { const pivot = new THREE.Group(); const w = new THREE.Mesh(wg, wm); const hub = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.08, V.wheels.radius * 1.4), new THREE.MeshStandardMaterial({ color: 0x666666 })); w.add(hub); pivot.add(w); this.mesh.add(pivot); this.wheels.push(pivot); }
     scene.add(this.mesh);
-    if (V.model) new GLTFLoader().load(V.model, g => { placeholder.visible = false; this.mesh.add(g.scene); });
+    this.wheelXZ = V.wheels.positions.map((p: number[]) => [p[0], p[2]]);
+    const url = (isTouch || location.search.includes('mobile')) && V.modelMobile ? V.modelMobile : V.model;
+    if (url && !location.search.includes('greybox')) {
+      const gl = new GLTFLoader(); const dr = new DRACOLoader(); dr.setDecoderPath('./draco/'); gl.setDRACOLoader(dr);
+      gl.load(url, g => {
+        const root = g.scene; const names = ['wheel_FL', 'wheel_FR', 'wheel_RL', 'wheel_RR'];
+        const nodes = names.map(n => root.getObjectByName(n));
+        if (nodes.every(Boolean)) {
+          root.updateMatrixWorld(true);
+          nodes.forEach((n, i) => {
+            const hub = new THREE.Vector3().setFromMatrixPosition(n!.matrixWorld); const sc = new THREE.Vector3().setFromMatrixScale(n!.matrixWorld);
+            this.wheelXZ[i] = [hub.x, hub.z];
+            n!.removeFromParent(); n!.position.set(0, 0, 0); n!.scale.copy(sc);
+            const pivot = this.wheels[i]; const spin = new THREE.Group(); spin.add(n!);
+            pivot.clear(); pivot.add(spin); // model wheel replaces greybox wheel: pivot steers (y), spin rotates (x)
+          });
+        } else this.wheels.forEach(w => w.visible = false); // wheels baked into body
+        root.traverse(o => { if ((o as THREE.Mesh).isMesh) { (o as THREE.Mesh).frustumCulled = false; const m = (o as THREE.Mesh).material as THREE.MeshStandardMaterial; if (envMap && m.isMeshStandardMaterial) { m.envMap = envMap; m.envMapIntensity = 0.7; } } });
+        placeholder.visible = false; this.mesh.add(root); this.modelLoaded = true; dr.dispose();
+      }, undefined, e => console.warn('car model failed, using greybox', e));
+    }
   }
   reset(p: number[], yawDeg: number) {
     this.body.setTranslation({ x: p[0], y: p[1], z: p[2] }, true);
@@ -56,7 +78,7 @@ export class Vehicle {
         load += F; b.applyImpulseAtPoint(this.up.clone().multiplyScalar(F * dt), o, true);
         contacts++; nSum.add(n);
       }
-      const wl = this.wheels[i]; wl.position.set(lp[0], lp[1] - Math.max(0.05, dist - W.radius), lp[2]);
+      const wl = this.wheels[i]; wl.position.set(this.wheelXZ[i][0], lp[1] - Math.max(0.05, dist - W.radius), this.wheelXZ[i][1]);
       wl.rotation.y = i < 2 ? -this.steerVis * 0.45 : 0; (wl.children[0] as THREE.Object3D).rotation.x = this.wheelSpin;
     }
     this.contacts = contacts;

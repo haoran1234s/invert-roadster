@@ -2,9 +2,9 @@ import { chromium } from 'playwright';
 const b = await chromium.launch({ executablePath: '/usr/bin/google-chrome', args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
 const p = await b.newPage({ viewport: { width: 1280, height: 720 } });
 const errs = []; p.on('console', m => { if (m.type() === 'error') errs.push(m.text()); }); p.on('pageerror', e => errs.push(String(e)));
-await p.goto('http://localhost:5180/'); await p.waitForFunction(() => window.__game, null, { timeout: 30000 }); await p.waitForTimeout(1500);
+await p.goto('http://localhost:5180/'); await p.waitForFunction(() => window.__game, null, { timeout: 30000 }); await p.waitForFunction(() => window.__game.modelLoaded?.() || location.search.includes('greybox'), null, { timeout: 60000 }).catch(() => console.log('MODEL NOT LOADED')); await p.waitForTimeout(1500);
 const S = (sec, c) => p.evaluate(([s, c]) => { window.__game.sim(s, c); return window.__game.state(); }, [sec, c]);
-const shot = async n => { await p.waitForTimeout(400); await p.screenshot({ path: `../shots/${n}.png` }); };
+const shot = async n => { await p.waitForTimeout(400); await p.screenshot({ path: `../shots/${process.env.P ?? ""}${n}.png` }); };
 await S(0.5, {}); await shot('01_start');
 const log = []; let st; let shots = new Set();
 for (let i = 0; i < 700; i++) {

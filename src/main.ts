@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import RAPIER from '@dimforge/rapier3d-compat';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import vehicleData from './data/vehicle.json';
 import thrusterData from './data/thrusters.json';
@@ -46,8 +47,10 @@ function adapt(dtMs: number) {
 }
 initTouch(Q.has('touch'));
 const world = new RAPIER.World({ x: 0, y: -9.81, z: 0 }); world.timestep = 1 / 60;
+let envTex: THREE.Texture | null = null;
 buildLevel(L, scene, world);
-const car = new Vehicle(vehicleData, thrusterData, world, scene);
+{ const pm = new THREE.PMREMGenerator(renderer); envTex = pm.fromScene(new RoomEnvironment(), 0.04).texture; pm.dispose(); }
+const car = new Vehicle(vehicleData, thrusterData, world, scene, envTex);
 const vapor = new Vapor(scene); const score = new Scoring(); const hud = new Hud(document.getElementById('hud') as HTMLCanvasElement); const rig = new CamRig(camera);
 let checkpoint = 0;
 function reset() { const cp = L.checkpoints[checkpoint]; car.reset(cp.pos, cp.yawDeg); score.reset(); rig.update(1, car, true); }
@@ -103,5 +106,6 @@ function mergeTouch(c: Controls): Controls {
   sim(sec: number, c: Partial<Controls>) { forced = { ...emptyControls(), ...c }; for (let i = 0; i < Math.round(sec * 60); i++) fixedStep(forced); rig.update(1 / 60, car, true); },
   perf() { const a = ftimes.slice(-120); return { avgMs: +(a.reduce((x, y) => x + y, 0) / a.length).toFixed(1), calls: renderer.info.render.calls, scale: +(BASE_DPR * scale).toFixed(2), bloom: bloomOn, touch: { ...touch }, tris: renderer.info.render.triangles, w: renderer.domElement.width, h: renderer.domElement.height }; },
   release() { forced = null; }, setCam(i: number) { rig.mode = i; rig.update(1 / 60, car, true); }, reset,
+  modelLoaded: () => car.modelLoaded,
   state: () => ({ pos: car.pos.toArray().map(x => +x.toFixed(2)), up: car.up.toArray().map(x => +x.toFixed(2)), normal: car.normal.toArray().map(x => +x.toFixed(2)), speed: +car.vel.length().toFixed(1), vy: +car.vel.y.toFixed(1), grounded: car.grounded, contacts: car.contacts, gas: +car.gas.toFixed(2), df: Math.round(car.downforceN / 9.81), score: Math.round(score.score), inv: +score.bestInverted.toFixed(2), stars: [...earned], crashed: score.crashed, msgs: score.msgs.map(m => m.t) }),
 };
