@@ -16,7 +16,7 @@ export function loadScenery(dir: string, scene: THREE.Scene, h: LevelHandles, ru
     const sx = runway.width / 0.29, tileLen = 1.165 * sx, n = Math.ceil(runway.length / tileLen);
     const inst = new THREE.InstancedMesh(m.geometry, mat, n); const M = new THREE.Matrix4();
     for (let i = 0; i < n; i++) { M.compose(new THREE.Vector3(0, -0.012, runway.zStart - tileLen * (i + 0.5)), new THREE.Quaternion(), new THREE.Vector3(sx, 1, sx)); inst.setMatrixAt(i, M); }
-    scene.add(inst); h.runway.visible = false; h.dashes.visible = false; h.lights.visible = false;
+    inst.receiveShadow = true; scene.add(inst); h.runway.visible = false; h.dashes.visible = false; h.lights.visible = false;
   }));
   done.push(loadGLB(dir + 'tower_hangar.glb').then(g => {
     g.scale.setScalar(90); g.position.set(-80, 0, 95); g.rotation.y = Math.PI / 2; scene.add(g); h.props.forEach(p => p.visible = false);
@@ -27,5 +27,5 @@ export function loadScenery(dir: string, scene: THREE.Scene, h: LevelHandles, ru
     scene.add(g);
   }));
   // tame envmap/brightness on dressing
-  return Promise.allSettled(done).then(r => { scene.traverse(o => { const mm = (o as THREE.Mesh).material as THREE.MeshStandardMaterial; if (mm?.isMeshStandardMaterial && envMap && !mm.envMap) { mm.envMap = envMap; mm.envMapIntensity = 0.5; } }); r.forEach(x => x.status === 'rejected' && console.warn('scenery load failed, keeping greybox', (x as PromiseRejectedResult).reason)); return r.filter(x => x.status === 'fulfilled').length; });
+  return Promise.allSettled(done).then(r => { scene.traverse(o => { if ((o as THREE.Mesh).isMesh && !(o as any).isInstancedMesh && o.parent !== scene) { o.castShadow = true; o.receiveShadow = true; } if ((o as any).isInstancedMesh && (o as THREE.Mesh).geometry.boundingBox === null) {} const mm = (o as THREE.Mesh).material as THREE.MeshStandardMaterial; if (mm?.isMeshStandardMaterial && envMap && !mm.envMap) { mm.envMap = envMap; mm.envMapIntensity = 0.5; } }); r.forEach(x => x.status === 'rejected' && console.warn('scenery load failed, keeping greybox', (x as PromiseRejectedResult).reason)); return r.filter(x => x.status === 'fulfilled').length; });
 }

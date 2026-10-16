@@ -3,7 +3,7 @@ const url = process.argv[2] || 'http://localhost:5180/';
 const b = await chromium.launch({ executablePath: '/usr/bin/google-chrome', args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
 const ctx = await b.newContext({ ...devices['iPhone 13 landscape'] });
 const p = await ctx.newPage(); const errs = []; p.on('pageerror', e => errs.push(String(e))); p.on('console', m => { if (m.type() === 'error') errs.push(m.text()); });
-await p.goto(url + '?debug=1'); await p.waitForFunction(() => window.__game, null, { timeout: 30000 }); await p.waitForFunction(() => window.__game.modelLoaded?.() || location.search.includes('greybox'), null, { timeout: 60000 }).catch(() => console.log('MODEL NOT LOADED')); await p.waitForTimeout(1500);
+await p.goto(url + '?play=1&debug=1'); await p.waitForFunction(() => window.__game, null, { timeout: 30000 }); await p.waitForFunction(() => window.__game.modelLoaded?.() || location.search.includes('greybox'), null, { timeout: 60000 }).catch(() => console.log('MODEL NOT LOADED')); await p.waitForTimeout(1500);
 const vis = await p.evaluate(() => !!document.querySelector('#tc .stick') && getComputedStyle(document.querySelector('#tc')).display !== 'none');
 const cdp = await ctx.newCDPSession(p);
 const box = s => p.evaluate(s => { const r = document.querySelector(s).getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; }, s);

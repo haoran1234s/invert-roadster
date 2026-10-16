@@ -1,0 +1,101 @@
+{
+ "id": "L4",
+ "name": "悬停时刻",
+ "desc": "用推进器升空，依次在 3 个光圈内各悬停 2 秒。本关气罐加大。",
+ "hint": "开到黄色光圈下，按住空格升空并悬停在光圈内 2 秒",
+ "hintTouch": "开到黄色光圈下，按住「推进」升空悬停 2 秒",
+ "start": {
+  "pos": [
+   0,
+   1.2,
+   230
+  ],
+  "yawDeg": 0
+ },
+ "runway": {
+  "length": 520,
+  "width": 22,
+  "zStart": 260,
+  "lightSpacing": 8
+ },
+ "ramps": [],
+ "tankSec": 40,
+ "maxAir": 120,
+ "timeLimit": 90,
+ "rings": [
+  {
+   "pos": [
+    0,
+    8,
+    190
+   ],
+   "r": 6,
+   "type": "hover",
+   "hold": 2
+  },
+  {
+   "pos": [
+    0,
+    8,
+    150
+   ],
+   "r": 6,
+   "type": "hover",
+   "hold": 2
+  },
+  {
+   "pos": [
+    0,
+    8,
+    110
+   ],
+   "r": 6,
+   "type": "hover",
+   "hold": 2
+  }
+ ],
+ "checkpoints": [
+  {
+   "pos": [
+    0,
+    1.2,
+    230
+   ],
+   "yawDeg": 0,
+   "z": 999
+  }
+ ],
+ "stars": [
+  {
+   "label": "完成 3 个光圈悬停",
+   "all": [
+    {
+     "t": "hoverAll"
+    }
+   ]
+  },
+  {
+   "label": "60 秒内完成",
+   "all": [
+    {
+     "t": "hoverAll"
+    },
+    {
+     "t": "time",
+     "v": 60
+    }
+   ]
+  },
+  {
+   "label": "首次升空后全程不落地",
+   "all": [
+    {
+     "t": "hoverAll"
+    },
+    {
+     "t": "noGround"
+    }
+   ]
+  }
+ ]
+}

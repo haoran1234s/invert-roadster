@@ -1,8 +1,0 @@
-{ "id": "L1", "name": "第一次倒挂", "desc": "全油门冲上巨型弯道，倒挂越过顶棚，后跃后用推进器（空格）稳住并安全落地。",
-  "start": { "pos": [0, 1.2, 230], "yawDeg": 0 },
-  "runway": { "length": 520, "width": 22, "zStart": 260, "lightSpacing": 8 },
-  "ramp": { "z0": 0, "radius": 30, "width": 18, "endDeg": 160, "segments": 96 },
-  "checkpoints": [ { "pos": [0, 1.2, 230], "yawDeg": 0, "z": 999 }, { "pos": [0, 1.2, 120], "yawDeg": 0, "z": 120 } ],
-  "stars": [ { "type": "invertedSec", "value": 0.3, "label": "完成倒挂" },
-             { "type": "safeLandAfterInvert", "value": 1, "label": "倒挂后安全落地" },
-             { "type": "score", "value": 3000, "label": "单次得分 ≥ 3000" } ] }

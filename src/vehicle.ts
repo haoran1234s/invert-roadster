@@ -30,7 +30,7 @@ export class Vehicle {
     for (let i = 0; i < 4; i++) { const pivot = new THREE.Group(); const w = new THREE.Mesh(wg, wm); const hub = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.08, V.wheels.radius * 1.4), new THREE.MeshStandardMaterial({ color: 0x666666 })); w.add(hub); pivot.add(w); this.mesh.add(pivot); this.wheels.push(pivot); }
     scene.add(this.mesh);
     this.wheelXZ = V.wheels.positions.map((p: number[]) => [p[0], p[2]]);
-    const url = (isTouch || location.search.includes('mobile')) && V.modelMobile ? V.modelMobile : V.model;
+    const url = (V.modelOverride as string) || ((isTouch || location.search.includes('mobile')) && V.modelMobile ? V.modelMobile : V.model);
     if (url && !location.search.includes('greybox')) {
       const gl = new GLTFLoader(); const dr = new DRACOLoader(); dr.setDecoderPath('./draco/'); gl.setDRACOLoader(dr);
       gl.load(url, g => {
@@ -46,7 +46,12 @@ export class Vehicle {
             pivot.clear(); pivot.add(spin); // model wheel replaces greybox wheel: pivot steers (y), spin rotates (x)
           });
         } else this.wheels.forEach(w => w.visible = false); // wheels baked into body
-        root.traverse(o => { if ((o as THREE.Mesh).isMesh) { (o as THREE.Mesh).frustumCulled = false; const m = (o as THREE.Mesh).material as THREE.MeshStandardMaterial; if (envMap && m.isMeshStandardMaterial) { m.envMap = envMap; m.envMapIntensity = 1.3; m.roughness = Math.min(m.roughness, 0.55); } } });
+        root.traverse(o => { if ((o as THREE.Mesh).isMesh) { (o as THREE.Mesh).frustumCulled = false; const mesh = o as THREE.Mesh; mesh.castShadow = true; mesh.receiveShadow = true; const m = mesh.material as THREE.MeshStandardMaterial;
+          if (m.isMeshStandardMaterial) { // car paint: physical clearcoat over the Hunyuan PBR maps
+            const pm = new THREE.MeshPhysicalMaterial({ map: m.map, normalMap: m.normalMap, roughnessMap: m.roughnessMap, metalnessMap: m.metalnessMap, color: m.color, metalness: m.metalness, roughness: Math.min(m.roughness, 0.5),
+              clearcoat: 1, clearcoatRoughness: 0.06, envMap: envMap ?? null, envMapIntensity: 1.4 });
+            mesh.material = pm; m.dispose();
+          } } });
         placeholder.visible = false; this.mesh.add(root); this.modelLoaded = true; dr.dispose(); if (this.pendingWheel) this.setWheelModel(this.pendingWheel);
       }, undefined, e => console.warn('car model failed, using greybox', e));
     }
@@ -59,11 +64,13 @@ export class Vehicle {
       const spin = pivot.children[0]; if (!spin) return;
       spin.children.forEach(c => c.visible = false);
       const c = w.clone(); c.rotation.y = Math.PI / 2; c.scale.set(k, k, k * 1.0); if (i % 2 === 0) c.scale.z *= -1; // mirror: rim faces outward
-      spin.add(c);
+      c.traverse(o => { o.castShadow = true; }); spin.add(c);
     });
     this.wheelModel = true;
   }
+  extBoost = 0;
   reset(p: number[], yawDeg: number) {
+    this.extBoost = 0;
     this.body.setTranslation({ x: p[0], y: p[1], z: p[2] }, true);
     const q = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), yawDeg * Math.PI / 180);
     this.body.setRotation(q, true); this.body.setLinvel({ x: 0, y: 0, z: 0 }, true); this.body.setAngvel({ x: 0, y: 0, z: 0 }, true);
@@ -97,7 +104,7 @@ export class Vehicle {
     this.prevNormal.copy(this.normal); if (contacts) { this.lastGround = this.time; this.normal.copy(nSum.normalize()); }
     const speed = this.vel.length();
     // downforce: k v^2 + fan constant (fan boosted with Shift)
-    const fanN = V.downforce.fanKg * G * (c.fan ? 1.6 : 1);
+    const fanN = c.thrust && this.gas > 0 ? 0 : V.downforce.fanKg * G * (c.fan ? 1.6 : 1); // fans off while lift thrusters fire (allows take-off)
     this.downforceN = this.attached ? V.downforce.k * speed * speed + fanN : 0;
     if (this.attached) b.applyImpulse(this.normal.clone().multiplyScalar(-this.downforceN * dt), true);
     const n = this.normal;
@@ -143,6 +150,7 @@ export class Vehicle {
     }
     // thrusters
     if (c.thrust && this.gas > 0) { this.thrusting = true; this.gas -= dt / T.tankSec; b.applyImpulse(this.up.clone().multiplyScalar(T.liftG * G * m * dt), true); }
+    if (this.extBoost > 0) { this.extBoost -= dt; this.boosting = true; b.applyImpulse(this.fwd.clone().multiplyScalar(T.boostG * 1.6 * G * m * dt), true); }
     if (c.boost && this.gas > 0) { this.boosting = true; this.gas -= dt / T.tankSec * 0.7; b.applyImpulse(this.fwd.clone().multiplyScalar(T.boostG * G * m * dt), true); }
     if (!this.thrusting && !this.boosting) this.gas = Math.min(1, this.gas + dt * (contacts ? T.regenGround : T.regenAir) / 1);
     this.gas = Math.max(0, this.gas);

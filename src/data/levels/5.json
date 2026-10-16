@@ -1,0 +1,111 @@
+{
+ "id": "L5",
+ "name": "半管飞越",
+ "desc": "冲上跳台飞越两座弯道之间的空中缺口，穿过橙色空中门后安全落地。",
+ "hint": "全油门冲上跳台，飞过橙色空中门，方向键空翻，稳稳落地",
+ "hintTouch": "全油门冲上跳台，飞过橙色空中门，空中推摇杆空翻",
+ "start": {
+  "pos": [
+   0,
+   1.2,
+   230
+  ],
+  "yawDeg": 0
+ },
+ "runway": {
+  "length": 760,
+  "width": 22,
+  "zStart": 260,
+  "lightSpacing": 8
+ },
+ "ramps": [
+  {
+   "z0": 0,
+   "radius": 40,
+   "width": 18,
+   "endDeg": 24,
+   "segments": 24
+  },
+  {
+   "z0": -420,
+   "radius": 30,
+   "width": 18,
+   "endDeg": 150,
+   "segments": 96
+  }
+ ],
+ "rings": [
+  {
+   "pos": [
+    0,
+    20,
+    -110
+   ],
+   "r": 11,
+   "type": "gate"
+  }
+ ],
+ "zones": [
+  {
+   "x": 0,
+   "z": -225,
+   "w": 40,
+   "l": 150,
+   "label": "落地区"
+  }
+ ],
+ "checkpoints": [
+  {
+   "pos": [
+    0,
+    1.2,
+    230
+   ],
+   "yawDeg": 0,
+   "z": 999
+  }
+ ],
+ "stars": [
+  {
+   "label": "穿过空中门并安全落地",
+   "all": [
+    {
+     "t": "ringsAll"
+    },
+    {
+     "t": "safeLand"
+    }
+   ]
+  },
+  {
+   "label": "空中门 + 空翻 1 次",
+   "all": [
+    {
+     "t": "ringsAll"
+    },
+    {
+     "t": "safeLand"
+    },
+    {
+     "t": "flips",
+     "v": 1
+    }
+   ]
+  },
+  {
+   "label": "得分 ≥ 8000",
+   "all": [
+    {
+     "t": "ringsAll"
+    },
+    {
+     "t": "safeLand"
+    },
+    {
+     "t": "score",
+     "v": 8000
+    }
+   ]
+  }
+ ]
+}
