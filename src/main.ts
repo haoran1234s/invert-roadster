@@ -14,7 +14,7 @@ import { Vapor } from './particles';
 import { Scoring, GRADE_MULT, GRADE_RANK, type Landing } from './scoring';
 import { Hud } from './hud';
 import { CamRig, CAMS } from './camera';
-import { initTouch, isTouch, touch } from './touch';
+import { initTouch, isTouch, touch, setMenuOpen } from './touch';
 import { readControls, pressedOnce, emptyControls, type Controls } from './input';
 import { loadQuality, saveStars, unlocked, loadProgress, type QName } from './quality';
 import { UI } from './ui';
@@ -255,7 +255,11 @@ function startReplay() { if (recN < 2) return; score.msgs = []; st = 'replay'; r
 function go(lvl: number) { const u = new URLSearchParams(location.search); u.delete('daily'); u.set('level', String(lvl)); u.set('play', '1'); location.search = u.toString(); }
 function goDaily() { const u = new URLSearchParams(location.search); u.delete('level'); u.set('daily', '1'); u.set('play', '1'); location.search = u.toString(); }
 const ui = new UI(LEVELS.map(l => ({ id: +l.id.slice(1), name: l.name, desc: l.desc, stars: l.stars.map(s => s.label) })), Q.has('play') || Q.has('level') ? LVL : 0, QUAL.name as QName, go, () => {}, goDaily, { get: () => assist, set: v => { assist = v; localStorage.setItem('invert.assist', v ? '1' : '0'); } });
-if (!Q.has('play') && !Q.has('level') && !DAILY) ui.main();
+if (!Q.has('play') && !Q.has('level') && !DAILY) ui.main(); else setMenuOpen(false);
+// game canvas must not steal taps while the menu is open
+renderer.domElement.style.pointerEvents = 'auto';
+const _syncPe = () => { renderer.domElement.style.pointerEvents = ui.open ? 'none' : 'auto'; };
+const _obs = new MutationObserver(_syncPe); _obs.observe(ui.root, { attributes: true, attributeFilter: ['class'] }); _syncPe();
 
 let forced: Controls | null = null; let acc = 0; let last = performance.now(); let fps = 60; let fc = 0, ft = 0;
 const ftimes: number[] = []; let lookLock = false;

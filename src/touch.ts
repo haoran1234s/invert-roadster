@@ -14,7 +14,10 @@ const css = `
 #tc .b.on{background:rgba(232,244,255,.45)}
 #tc .top{position:absolute;right:max(14px,env(safe-area-inset-right));top:120px;display:flex;flex-direction:column;gap:8px}
 #tc .top .b{width:52px;height:40px;border-radius:10px;font-size:12px}
-#rot{position:fixed;inset:0;z-index:9;background:#05070d;color:#e8f4ff;display:none;align-items:center;justify-content:center;flex-direction:column;font:16px "Microsoft YaHei",sans-serif;text-align:center}
+body.menu-open #tc,body.menu-open canvas{pointer-events:none!important;visibility:hidden}
+body.menu-open canvas{visibility:visible;pointer-events:none!important}
+body.menu-open #rot{display:none!important}
+#rot{position:fixed;inset:0;z-index:9;background:#05070d;color:#e8f4ff;display:none;align-items:center;justify-content:center;flex-direction:column;font:16px "Microsoft YaHei",sans-serif;text-align:center;pointer-events:none}
 #rot .ph{width:46px;height:80px;border:3px solid #e8f4ff;border-radius:8px;margin-bottom:18px;animation:r 1.6s infinite}
 @keyframes r{0%,20%{transform:rotate(0)}60%,100%{transform:rotate(-90deg)}}
 @media (orientation: portrait){#rot.t{display:flex}}`;
@@ -27,6 +30,18 @@ function hold(el: HTMLElement, key: 'thrust' | 'fan' | 'boost') {
 }
 function tap(el: HTMLElement, code: string) {
   el.addEventListener('pointerdown', e => { e.preventDefault(); pressedOnce.push(code); el.classList.add('on'); setTimeout(() => el.classList.remove('on'), 150); });
+}
+
+/** True if the event target is a menu / form control that must receive real clicks. */
+function isUiTarget(t: EventTarget | null) {
+  const el = t as HTMLElement | null;
+  if (!el || !el.closest) return false;
+  return !!el.closest('.ui, #menuBtn, input, textarea, select, button, a, [data-l]');
+}
+
+export function setMenuOpen(open: boolean) {
+  document.body.classList.toggle('menu-open', open);
+  if (open) { touch.x = touch.y = 0; touch.thrust = touch.fan = touch.boost = false; }
 }
 
 export function initTouch(force = false) {
@@ -53,7 +68,21 @@ export function initTouch(force = false) {
   stick.addEventListener('pointermove', e => { if (e.pointerId === id) move(e); });
   const end = (e: PointerEvent) => { if (e.pointerId !== id) return; id = -1; touch.x = touch.y = 0; knob.style.transform = ''; };
   stick.addEventListener('pointerup', end); stick.addEventListener('pointercancel', end); stick.addEventListener('lostpointercapture', end);
-  // block page gestures
-  for (const t of ['touchstart', 'touchmove', 'gesturestart', 'dblclick']) document.addEventListener(t, e => e.preventDefault(), { passive: false });
+  // Block page scroll / pinch only on the game surface — NEVER on menu buttons.
+  // A blanket document touchstart.preventDefault() kills synthetic clicks on iOS/Android,
+  // which is why phones could not enter levels.
+  const block = (e: Event) => {
+    if (document.body.classList.contains('menu-open') || isUiTarget(e.target)) return;
+    e.preventDefault();
+  };
+  document.addEventListener('touchmove', block, { passive: false });
+  document.addEventListener('gesturestart', block, { passive: false });
+  document.addEventListener('dblclick', block, { passive: false });
+  // touchstart: only prevent on canvas / #tc so the browser still synthesizes clicks for .ui
+  document.addEventListener('touchstart', e => {
+    if (document.body.classList.contains('menu-open') || isUiTarget(e.target)) return;
+    const el = e.target as HTMLElement;
+    if (el === document.body || el === document.documentElement || el.tagName === 'CANVAS' || el.closest?.('#tc,#hud')) e.preventDefault();
+  }, { passive: false });
   return true;
 }
