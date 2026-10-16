@@ -1,0 +1,61 @@
+{
+ "name": "Volt Roadster (placeholder)",
+ "model": "",
+ "wheelModel": "",
+ "body": {
+  "halfExtents": [
+   0.95,
+   0.32,
+   2.25
+  ],
+  "density": 230
+ },
+ "wheels": {
+  "positions": [
+   [
+    -0.88,
+    -0.2,
+    -1.45
+   ],
+   [
+    0.88,
+    -0.2,
+    -1.45
+   ],
+   [
+    -0.88,
+    -0.2,
+    1.45
+   ],
+   [
+    0.88,
+    -0.2,
+    1.45
+   ]
+  ],
+  "radius": 0.36,
+  "rest": 0.42,
+  "stiffness": 140000,
+  "damping": 10000
+ },
+ "engine": {
+  "accel": 13,
+  "topSpeed": 75,
+  "brake": 22,
+  "reverse": 6
+ },
+ "grip": {
+  "mu": 1.7,
+  "maxYawRate": 1.7
+ },
+ "downforce": {
+  "k": 9.0,
+  "fanKg": 900,
+  "graceSec": 0.2
+ },
+ "air": {
+  "rotAccel": 5.0,
+  "stabilize": 3.0,
+  "angularDamping": 0.25
+ }
+}
